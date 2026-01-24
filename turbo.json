@@ -6,7 +6,7 @@
       "outputs": ["wasm/**"]
     },
     "build": {
-      "dependsOn": ["^build", "build:wasm"],
+      "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
     "dev": {
