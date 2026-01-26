@@ -2,12 +2,17 @@
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
     "build:wasm": {
-      "cache": true,
-      "outputs": ["wasm/**"]
+      "cache": false,
+      "inputs": ["src/wasm/**", "../../Dockerfile", "../../emscripten-cross.txt"],
+      "outputs": ["src/wasm/*.js", "src/wasm/*.wasm"]
+    },
+    "build:ts": {
+      "dependsOn": ["^build", "build:wasm"],
+      "outputs": ["dist/**"]
     },
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "dependsOn": ["^build", "build:wasm", "build:ts"],
+      "outputs": []
     },
     "dev": {
       "cache": false,

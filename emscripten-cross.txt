@@ -12,3 +12,7 @@ endian = 'little'
 
 [properties]
 needs_exe_wrapper = true
+
+[built-in options]
+c_args = ['-s', 'USE_PTHREADS=1', '-msimd128']
+c_link_args = ['-s', 'USE_PTHREADS=1']

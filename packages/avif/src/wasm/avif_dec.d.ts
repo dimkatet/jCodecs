@@ -2,14 +2,7 @@ import type {
   ColorPrimaries,
   TransferFunction,
   MatrixCoefficients,
-} from '../src/types';
-
-/** Emscripten std::vector<uint8_t> binding */
-interface EmscriptenVector {
-  size(): number;
-  get(index: number): number;
-  delete(): void;
-}
+} from '../types';
 
 interface WASMMasteringDisplay {
   redX: number;
@@ -33,7 +26,8 @@ interface WASMImageMetadata {
   maxCLL: number;
   maxPALL: number;
   masteringDisplay: WASMMasteringDisplay;
-  iccProfile: EmscriptenVector;
+  iccProfilePtr: number;  // Pointer to ICC data in WASM heap
+  iccProfileSize: number; // Size in bytes
   isHDR: boolean;
 }
 
@@ -46,6 +40,7 @@ interface DecodeResult {
   hasAlpha: boolean;
   metadata: WASMImageMetadata;
   error: string;
+  timings: object;
 }
 
 interface WASMImageInfo {
@@ -58,14 +53,17 @@ interface WASMImageInfo {
 
 interface AVIFDecoderModule {
   decode(
-    data: string,
+    inputPtr: number,
+    inputSize: number,
     targetBitDepth: number,
     maxThreads: number
   ): DecodeResult;
-  getImageInfo(data: string): WASMImageInfo;
+  getImageInfo(inputPtr: number, inputSize: number): WASMImageInfo;
 
-  // Direct WASM heap access for zero-copy
+  // WASM memory management
   HEAPU8: Uint8Array;
+  HEAPU16: Uint16Array;
+  _malloc(size: number): number;
   _free(ptr: number): void;
 }
 

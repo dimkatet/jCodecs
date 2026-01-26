@@ -27,11 +27,12 @@ set(COMMON_LINK_FLAGS
     "-s MAXIMUM_MEMORY=2147483648"
     "-s NO_FILESYSTEM=1"
     "-s ENVIRONMENT='web,worker'"
-    "-s EXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
+    "-s EXPORTED_RUNTIME_METHODS=['ccall','cwrap','HEAPU8','HEAPU16']"
     "-s DYNAMIC_EXECUTION=0"
     "-s EXPORTED_FUNCTIONS=['_malloc','_free']"
     "-s EMBIND_STD_STRING_IS_UTF8=0"
     "--bind"
+    "-msimd128"
     "-O3"
     "-flto"
 )
@@ -40,8 +41,7 @@ set(COMMON_LINK_FLAGS
 set(MT_FLAGS
     "-pthread"
     "-s USE_PTHREADS=1"
-    "-s PTHREAD_POOL_SIZE=navigator.hardwareConcurrency"
-    "-s SHARED_MEMORY=1"
+    "-s PTHREAD_POOL_SIZE=\"navigator.hardwareConcurrency || 4\""
 )
 
 string(REPLACE ";" " " COMMON_LINK_FLAGS_STR "${COMMON_LINK_FLAGS}")
@@ -60,7 +60,7 @@ target_include_directories(avif_dec PRIVATE
     ${LIBAVIF_INCLUDE}
     ${DAV1D_INCLUDE}
 )
-target_compile_options(avif_dec PRIVATE -O3 -flto)
+target_compile_options(avif_dec PRIVATE -O3 -flto -msimd128)
 set_target_properties(avif_dec PROPERTIES
     LINK_FLAGS "${COMMON_LINK_FLAGS_STR} -s EXPORT_NAME='createAVIFDecoder'"
     SUFFIX ".js"

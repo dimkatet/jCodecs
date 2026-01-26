@@ -117,28 +117,24 @@ const encoded = await encode(hdrImage, {
 
 - Node.js 20+
 - pnpm 9+
-- Docker (for WASM build)
-- Emscripten SDK 3.1.61+ (or use Docker)
+- Docker
 
 ### Build Steps
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/jcodecs.git
+git clone https://github.com/anthropics/jcodecs.git
 cd jcodecs
 
 # Install dependencies
 pnpm install
 
-# Build WASM (requires Docker or Emscripten)
-# Option 1: Using Docker
-docker run -v $(pwd):/build -w /build emscripten/emsdk:3.1.61 bash scripts/build-avif.sh
-
-# Option 2: With Emscripten installed locally
-./scripts/build-avif.sh
-
-# Build TypeScript
+# Full build (WASM + TypeScript)
 pnpm build
+
+# Or step by step:
+pnpm build:wasm    # Build WASM modules via Docker
+pnpm build:ts      # Build TypeScript
 
 # Run tests
 pnpm test
@@ -149,23 +145,18 @@ pnpm test
 ```
 jCodecs/
 ├── packages/
-│   ├── core/           # Shared utilities and types
+│   ├── core/              # Shared utilities and types
 │   │   └── src/
-│   │       ├── types.ts
-│   │       ├── memory.ts
-│   │       └── worker-pool.ts
-│   └── avif/           # AVIF codec
+│   └── avif/              # AVIF codec
 │       ├── src/
-│       │   ├── wasm/   # C++ wrappers
-│       │   ├── encode.ts
+│       │   ├── wasm/      # C++ sources + compiled WASM
 │       │   ├── decode.ts
 │       │   └── ...
-│       └── wasm/       # Compiled WASM files
-├── native/             # Native library sources
-│   ├── libavif/
-│   ├── aom/
-│   └── dav1d/
-└── scripts/            # Build scripts
+│       └── dist/          # Published to npm
+├── examples/
+│   └── browser-esm/       # Browser example
+├── Dockerfile             # Multi-stage WASM build
+└── turbo.json             # Monorepo configuration
 ```
 
 ## Roadmap

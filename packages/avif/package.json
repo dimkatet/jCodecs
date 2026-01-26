@@ -26,20 +26,18 @@
       "types": "./dist/worker-api.d.ts",
       "import": "./dist/worker-api.js",
       "require": "./dist/worker-api.cjs"
-    },
-    "./wasm/*": "./wasm/*"
+    }
   },
   "files": [
-    "dist",
-    "wasm"
+    "dist"
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsup",
-    "build:wasm": "bash ../../scripts/build-avif.sh",
+    "build": "echo 'Use turbo: pnpm build:wasm && pnpm build:ts'",
+    "build:wasm": "docker build --target avif --output type=local,dest=src/wasm -f ../../Dockerfile ../..",
+    "build:ts": "tsup && cp src/wasm/*.wasm src/wasm/*.js dist/",
     "dev": "tsup --watch",
     "test": "vitest run",
-    "test:browser": "vitest run --browser",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
