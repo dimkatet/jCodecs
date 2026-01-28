@@ -9,10 +9,10 @@ export default defineConfig({
   resolve: {
     alias: {
       // Subpath exports must come before main export
-      "@jcodecs/core/codec-worker": resolve(__dirname, "packages/core/src/codec-worker.ts"),
-      "@jcodecs/core/codec-worker-client": resolve(__dirname, "packages/core/src/codec-worker-client.ts"),
-      "@jcodecs/core": resolve(__dirname, "packages/core/src/index.ts"),
-      "@jcodecs/avif": resolve(__dirname, "packages/avif/src/index.ts"),
+      "@dimkatet/jcodecs-core/codec-worker": resolve(__dirname, "packages/core/src/codec-worker.ts"),
+      "@dimkatet/jcodecs-core/codec-worker-client": resolve(__dirname, "packages/core/src/codec-worker-client.ts"),
+      "@dimkatet/jcodecs-core": resolve(__dirname, "packages/core/src/index.ts"),
+      "@dimkatet/jcodecs-avif": resolve(__dirname, "packages/avif/src/index.ts"),
     },
   },
 

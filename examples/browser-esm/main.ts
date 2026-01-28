@@ -1,4 +1,4 @@
-import { decodeInWorker, initWorkerPool, getWorkerPoolStats } from "@jcodecs/avif";
+import { decodeInWorker, initWorkerPool, getWorkerPoolStats } from "@dimkatet/jcodecs-avif";
 
 const fileInput = document.getElementById("fileInput");
 const inputCanvas = document.getElementById("inputCanvas");

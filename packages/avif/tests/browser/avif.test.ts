@@ -6,8 +6,8 @@
  */
 
 import { describe, it, expect, beforeAll } from "vitest";
-import { decode, getImageInfo, init } from "@jcodecs/avif";
-import type { AVIFImageData, AVIFImageInfo } from "@jcodecs/avif";
+import { decode, getImageInfo, init } from "@dimkatet/jcodecs-avif";
+import type { AVIFImageData, AVIFImageInfo } from "@dimkatet/jcodecs-avif";
 
 async function loadFixture(filename: string): Promise<Uint8Array> {
   const response = await fetch(`/${filename}`);

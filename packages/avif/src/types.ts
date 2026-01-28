@@ -1,4 +1,4 @@
-import type { ExtendedImageData, ImageInfo } from '@jcodecs/core';
+import type { ExtendedImageData, ImageInfo } from '@dimkatet/jcodecs-core';
 
 // ============================================================================
 // CICP types (Coding-Independent Code Points)

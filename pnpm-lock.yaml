@@ -32,13 +32,13 @@ importers:
 
   examples/browser-esm:
     dependencies:
-      '@jcodecs/avif':
+      '@dimkatet/jcodecs-avif':
         specifier: workspace:*
         version: link:../../packages/avif
 
   packages/avif:
     dependencies:
-      '@jcodecs/core':
+      '@dimkatet/jcodecs-core':
         specifier: workspace:*
         version: link:../core
     devDependencies:

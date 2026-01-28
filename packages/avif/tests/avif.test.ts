@@ -7,7 +7,7 @@ import {
   DEFAULT_DECODE_OPTIONS,
 } from '../src/index';
 
-describe('@jcodecs/avif', () => {
+describe('@dimkatet/jcodecs-avif', () => {
   describe('module exports', () => {
     it('should export encode and decode functions', async () => {
       const module = await import('../src/index');

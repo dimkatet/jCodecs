@@ -1,7 +1,7 @@
 /**
  * AVIF Worker - runs encode/decode operations in a Web Worker
  */
-import { createCodecWorker } from '@jcodecs/core/codec-worker';
+import { createCodecWorker } from '@dimkatet/jcodecs-core/codec-worker';
 import { encode } from './encode';
 import { decode, init as initDecoder } from './decode';
 

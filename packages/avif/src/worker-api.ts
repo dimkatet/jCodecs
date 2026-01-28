@@ -1,7 +1,7 @@
 /**
  * Worker API for AVIF encoding/decoding
  */
-import { CodecWorkerClient } from '@jcodecs/core/codec-worker-client';
+import { CodecWorkerClient } from '@dimkatet/jcodecs-core/codec-worker-client';
 import type { AVIFEncodeOptions, AVIFDecodeOptions } from './options';
 import type { AVIFImageData } from './types';
 

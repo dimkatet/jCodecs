@@ -1,5 +1,5 @@
 {
-  "name": "@jcodecs/avif",
+  "name": "@dimkatet/jcodecs-avif",
   "version": "0.1.0",
   "description": "AVIF encoder/decoder using libavif compiled to WebAssembly",
   "type": "module",
@@ -33,7 +33,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "echo 'Use turbo: pnpm build:wasm && pnpm build:ts'",
+    "build": "pnpm build:wasm && pnpm build:ts",
     "build:wasm": "docker build --target avif --output type=local,dest=src/wasm -f ../../Dockerfile ../..",
     "build:ts": "tsup && cp src/wasm/*.wasm src/wasm/*.js dist/",
     "dev": "tsup --watch",
@@ -42,7 +42,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@jcodecs/core": "workspace:*"
+    "@dimkatet/jcodecs-core": "workspace:*"
   },
   "devDependencies": {
     "@types/emscripten": "^1.39.10",
@@ -61,5 +61,13 @@
     "libavif",
     "hdr"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dimkatet/jCodecs.git",
+    "directory": "packages/avif"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
 }

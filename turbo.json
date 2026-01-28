@@ -7,12 +7,12 @@
       "outputs": ["src/wasm/*.js", "src/wasm/*.wasm"]
     },
     "build:ts": {
-      "dependsOn": ["^build", "build:wasm"],
+      "dependsOn": ["^build:ts"],
       "outputs": ["dist/**"]
     },
     "build": {
-      "dependsOn": ["^build", "build:wasm", "build:ts"],
-      "outputs": []
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
     },
     "dev": {
       "cache": false,

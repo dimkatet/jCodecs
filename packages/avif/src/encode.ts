@@ -1,4 +1,4 @@
-import type { ExtendedImageData } from '@jcodecs/core';
+import type { ExtendedImageData } from '@dimkatet/jcodecs-core';
 import type { AVIFEncodeOptions } from './options';
 
 /**

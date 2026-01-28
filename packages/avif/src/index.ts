@@ -50,7 +50,7 @@ export {
 } from './worker-api';
 
 // Re-export generic types from core
-export type { ExtendedImageData, ImageInfo } from '@jcodecs/core';
+export type { ExtendedImageData, ImageInfo } from '@dimkatet/jcodecs-core';
 
 /**
  * Initialize decoder (encoder not yet available)

@@ -1,12 +1,13 @@
 # jCodecs
 
-Image codecs for the browser using WebAssembly. Currently supports AVIF encoding/decoding with plans to add more formats.
+Browser-native image codecs powered by WebAssembly.
 
 ## Features
 
-- **AVIF Codec** - Full encoding and decoding support via libavif
-- **HDR Support** - 8, 10, 12, and 16-bit images with wide color gamut (Display P3, Rec.2020)
-- **Web Workers** - Non-blocking image processing via Worker Pool
+- **AVIF Decoder** - High-performance decoding via libavif + dav1d
+- **HDR Support** - 8, 10, 12-bit with full HDR metadata (PQ, HLG, color primaries)
+- **Multi-threaded** - Optional SharedArrayBuffer-based parallelism
+- **Web Workers** - Non-blocking processing via Worker Pool
 - **TypeScript** - Full type definitions included
 - **Tree-shakeable** - Import only what you need
 
@@ -21,55 +22,48 @@ pnpm add @jcodecs/avif
 ## Quick Start
 
 ```typescript
-import { encode, decode, init } from '@jcodecs/avif';
+import { decode, decodeToImageData } from '@jcodecs/avif';
 
-// Initialize WASM (required once)
-await init();
-
-// Decode AVIF to ImageData
+// Decode AVIF to raw pixel data with metadata
 const response = await fetch('image.avif');
 const avifData = new Uint8Array(await response.arrayBuffer());
-const imageData = await decode(avifData);
+const result = await decode(avifData);
 
-// Encode ImageData to AVIF
-const canvas = document.querySelector('canvas');
-const ctx = canvas.getContext('2d');
-const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+console.log(result.width, result.height);
+console.log(result.metadata.transferFunction); // "pq" | "hlg" | "srgb"
+console.log(result.metadata.isHDR);
 
-const avifBytes = await encode(pixels, {
-  quality: 80,
-  speed: 6,
-});
-
-// Download the result
-const blob = new Blob([avifBytes], { type: 'image/avif' });
-const url = URL.createObjectURL(blob);
+// Or decode directly to Canvas ImageData (8-bit sRGB)
+const imageData = await decodeToImageData(avifData);
+ctx.putImageData(imageData, 0, 0);
 ```
 
 ## API Reference
-
-### Encode Options
-
-```typescript
-interface AVIFEncodeOptions {
-  quality?: number;           // 0-100, default: 75
-  qualityAlpha?: number;      // 0-100, default: 100
-  speed?: number;             // 0-10 (10=fastest), default: 6
-  chromaSubsampling?: '4:4:4' | '4:2:2' | '4:2:0' | '4:0:0';
-  bitDepth?: 8 | 10 | 12;     // default: 8
-  colorSpace?: 'srgb' | 'display-p3' | 'rec2020';
-  lossless?: boolean;         // default: false
-  threads?: number;           // 0=auto, default: 0
-}
-```
 
 ### Decode Options
 
 ```typescript
 interface AVIFDecodeOptions {
-  bitDepth?: 0 | 8 | 10 | 12 | 16;  // 0=auto
+  bitDepth?: 0 | 8 | 10 | 12 | 16;  // 0=auto (preserve original)
   useThreads?: boolean;              // default: true
   maxThreads?: number;               // 0=auto
+}
+```
+
+### Decode Result
+
+```typescript
+interface AVIFImageData {
+  data: Uint8Array | Uint16Array;  // Uint16Array for >8 bit
+  width: number;
+  height: number;
+  bitDepth: number;
+  metadata: {
+    isHDR: boolean;
+    transferFunction: 'srgb' | 'pq' | 'hlg';
+    colorPrimaries: 'bt709' | 'bt2020' | 'p3';
+    // ... ICC profile, CICP values, etc.
+  };
 }
 ```
 
@@ -78,37 +72,38 @@ interface AVIFDecodeOptions {
 For heavy workloads, use the Worker Pool to avoid blocking the main thread:
 
 ```typescript
-import { initWorkerPool, encodeInWorker, decodeInWorker } from '@jcodecs/avif/worker';
+import {
+  initWorkerPool,
+  decodeInWorker,
+  terminateWorkerPool,
+} from '@jcodecs/avif';
 
-// Initialize worker pool (4 workers by default)
+// Initialize worker pool (uses navigator.hardwareConcurrency by default)
 await initWorkerPool({ poolSize: 4 });
 
-// Encode in worker
-const avifBytes = await encodeInWorker(imageData, { quality: 80 });
+// Decode multiple images in parallel
+const results = await Promise.all(
+  images.map(img => decodeInWorker(img))
+);
 
-// Decode in worker
-const decoded = await decodeInWorker(avifData);
+// Cleanup when done
+terminateWorkerPool();
 ```
 
 ### HDR Images
 
 ```typescript
-import { decode, encode, getImageInfo } from '@jcodecs/avif';
+import { decode, getImageInfo } from '@jcodecs/avif';
 
-// Check if image is HDR
+// Check if image is HDR before decoding
 const info = await getImageInfo(avifData);
 console.log('Is HDR:', info.isHDR);
 console.log('Bit depth:', info.bitDepth);
+console.log('Transfer:', info.transferFunction); // "pq" | "hlg" | "srgb"
 
-// Decode as 10-bit
-const hdrImage = await decode(avifData, { bitDepth: 10 });
-// hdrImage.data is Uint16Array for >8 bit
-
-// Encode HDR
-const encoded = await encode(hdrImage, {
-  bitDepth: 10,
-  colorSpace: 'rec2020',
-});
+// Decode preserving original bit depth
+const hdrImage = await decode(avifData, { bitDepth: 0 });
+// hdrImage.data is Uint16Array for >8 bit images
 ```
 
 ## Building from Source
@@ -147,12 +142,16 @@ jCodecs/
 ├── packages/
 │   ├── core/              # Shared utilities and types
 │   │   └── src/
+│   │       ├── worker-pool.ts        # Worker pool with task queue
+│   │       ├── codec-worker.ts       # Worker-side helper
+│   │       └── codec-worker-client.ts # Main thread helper
 │   └── avif/              # AVIF codec
 │       ├── src/
 │       │   ├── wasm/      # C++ sources + compiled WASM
 │       │   ├── decode.ts
-│       │   └── ...
-│       └── dist/          # Published to npm
+│       │   ├── worker.ts
+│       │   └── worker-api.ts
+│       └── tests/
 ├── examples/
 │   └── browser-esm/       # Browser example
 ├── Dockerfile             # Multi-stage WASM build
@@ -161,14 +160,14 @@ jCodecs/
 
 ## Roadmap
 
-- [x] AVIF encode/decode
-- [x] HDR support (10/12-bit, wide gamut)
-- [x] Web Workers API
+- [x] AVIF decoder (libavif + dav1d)
+- [x] HDR metadata support (PQ, HLG, color primaries)
+- [x] Multi-threaded decoding (SharedArrayBuffer)
+- [x] Web Workers API with pool
+- [ ] AVIF encoder (blocked: aom requires SSE2)
 - [ ] JPEG-XL codec
 - [ ] WebP codec
 - [ ] OpenEXR codec
-- [ ] Streaming API
-- [ ] Node.js support
 
 ## License
 
@@ -178,6 +177,5 @@ MIT
 
 Built on top of:
 - [libavif](https://github.com/AOMediaCodec/libavif) - AVIF library
-- [aom](https://aomedia.googlesource.com/aom/) - AV1 encoder
 - [dav1d](https://code.videolan.org/videolan/dav1d) - AV1 decoder
 - [Emscripten](https://emscripten.org/) - WASM compiler

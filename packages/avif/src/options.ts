@@ -1,4 +1,4 @@
-import type { ProgressCallback } from '@jcodecs/core';
+import type { ProgressCallback } from '@dimkatet/jcodecs-core';
 import type { AVIFMetadata } from './types';
 
 /**

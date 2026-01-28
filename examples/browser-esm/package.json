@@ -7,6 +7,6 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@jcodecs/avif": "workspace:*"
+    "@dimkatet/jcodecs-avif": "workspace:*"
   }
 }

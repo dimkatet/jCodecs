@@ -1,5 +1,5 @@
 {
-  "name": "@jcodecs/core",
+  "name": "@dimkatet/jcodecs-core",
   "version": "0.1.0",
   "description": "Core utilities and types for jCodecs",
   "type": "module",
@@ -43,7 +43,8 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsup",
+    "build": "pnpm build:ts",
+    "build:ts": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
@@ -54,5 +55,13 @@
     "typescript": "^5.4.0",
     "vitest": "^4.0.18"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dimkatet/jCodecs.git",
+    "directory": "packages/core"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
 }
