@@ -4,6 +4,7 @@
     "baseUrl": ".",
     "paths": {
       "@jcodecs/core": ["./packages/core/src/index.ts"],
+      "@jcodecs/core/*": ["./packages/core/src/*"],
       "@jcodecs/avif": ["./packages/avif/src/index.ts"]
     }
   },

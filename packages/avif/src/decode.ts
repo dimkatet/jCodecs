@@ -24,7 +24,7 @@ let decoderModuleMT: AVIFDecoderModule | null = null;
 let initPromise: Promise<void> | null = null;
 
 // Profiling
-let profilingEnabled = true;
+let profilingEnabled = false;
 
 export interface DecodeProfile {
   inputSize: number;
@@ -87,16 +87,16 @@ export async function init(wasmUrl?: string): Promise<void> {
 
     if (isSharedArrayBufferAvailable()) {
       try {
-        console.log("Initializing AVIF multi-threaded decoder");
         const createMTModule = (await import("./wasm/avif_dec_mt.js"))
           .default as ModuleFactory;
         decoderModuleMT = await createMTModule(moduleConfig);
       } catch (e) {
-        console.error("Failed to initialize AVIF multi-threaded decoder:", e);
         console.warn("AVIF multi-threaded decoder not available");
+        const createModule = (await import("./wasm/avif_dec.js"))
+          .default as ModuleFactory;
+        decoderModule = await createModule(moduleConfig);
       }
     } else {
-      console.log("Initializing AVIF single-threaded decoder");
       const createModule = (await import("./wasm/avif_dec.js"))
         .default as ModuleFactory;
       decoderModule = await createModule(moduleConfig);
@@ -175,32 +175,20 @@ export async function decode(
   const opts = { ...DEFAULT_DECODE_OPTIONS, ...options };
 
   const useMT = opts.useThreads && decoderModuleMT;
-  let module: AVIFDecoderModule;
-  if (useMT) {
-    console.log("Using multi-threaded AVIF decoder");
-    module = decoderModuleMT!;
-  } else {
-    console.log("Using single-threaded AVIF decoder");
-    module = decoderModule!;
-  }
-  // const module = useMT ? decoderModuleMT! : decoderModule!;
+  const module: AVIFDecoderModule = decoderModuleMT || decoderModule!;
 
   const maxThreads = useMT
-    ? opts.maxThreads || navigator.hardwareConcurrency || 4
+    ? opts.maxThreads ?? navigator.hardwareConcurrency ?? 4
     : 1;
 
   // Copy input data to WASM heap
   const t1 = profilingEnabled ? performance.now() : 0;
-  console.log(`Copying ${data.length} bytes to WASM heap`);
   const inputPtr = copyToWasm(module, data);
-  console.log("Copy to WASM done");
   const t2 = profilingEnabled ? performance.now() : 0;
 
   let result;
   try {
-    console.log('Starting AVIF decode in WASM');
     result = module.decode(inputPtr, data.length, opts.bitDepth, maxThreads);
-    console.log("AVIF decode timings (ms):", result.timings);
   } finally {
     module._free(inputPtr);
   }
@@ -253,7 +241,7 @@ export async function decode(
     width: result.width,
     height: result.height,
     bitDepth: outputDepth,
-    hasAlpha: result.hasAlpha,
+    channels: result.channels,
     metadata,
   };
 }
@@ -270,7 +258,7 @@ export async function decodeToImageData(
   const pixelCount = result.width * result.height;
   const rgbaData = new Uint8ClampedArray(pixelCount * 4);
 
-  if (result.hasAlpha) {
+  if (result.channels === 4) {
     const src = result.data as Uint8Array;
     rgbaData.set(src);
   } else {
@@ -295,7 +283,7 @@ export async function getImageInfo(
   await init();
 
   const data = input instanceof ArrayBuffer ? new Uint8Array(input) : input;
-  const module = decoderModule!;
+  const module = decoderModuleMT || decoderModule!;
 
   // Copy input data to WASM heap
   const inputPtr = copyToWasm(module, data);
@@ -311,7 +299,7 @@ export async function getImageInfo(
     width: result.width,
     height: result.height,
     bitDepth: result.depth,
-    hasAlpha: result.hasAlpha,
+    channels: result.channels,
     metadata: convertMetadata(result.metadata, module),
   };
 }

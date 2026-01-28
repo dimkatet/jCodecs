@@ -51,9 +51,6 @@ describe('@jcodecs/avif', () => {
     it('should report decoder as not initialized before init', () => {
       expect(isDecoderInitialized()).toBe(false);
     });
-
-    // Browser-only tests would go here
-    // WASM modules require browser environment
   });
 
   describe('options', () => {

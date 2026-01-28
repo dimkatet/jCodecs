@@ -1,0 +1,12 @@
+{
+  "name": "playground",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@jcodecs/avif": "workspace:*"
+  }
+}

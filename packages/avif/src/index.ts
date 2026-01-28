@@ -39,6 +39,16 @@ export type {
 
 export { DEFAULT_SRGB_METADATA } from './types';
 
+// Worker API
+export {
+  initWorkerPool,
+  encodeInWorker,
+  decodeInWorker,
+  getWorkerPoolStats,
+  terminateWorkerPool,
+  isWorkerPoolInitialized,
+} from './worker-api';
+
 // Re-export generic types from core
 export type { ExtendedImageData, ImageInfo } from '@jcodecs/core';
 

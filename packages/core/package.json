@@ -26,6 +26,16 @@
       "types": "./dist/worker-pool.d.ts",
       "import": "./dist/worker-pool.js",
       "require": "./dist/worker-pool.cjs"
+    },
+    "./codec-worker": {
+      "types": "./dist/codec-worker.d.ts",
+      "import": "./dist/codec-worker.js",
+      "require": "./dist/codec-worker.cjs"
+    },
+    "./codec-worker-client": {
+      "types": "./dist/codec-worker-client.d.ts",
+      "import": "./dist/codec-worker-client.js",
+      "require": "./dist/codec-worker-client.cjs"
     }
   },
   "files": [
@@ -35,12 +45,14 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
   "devDependencies": {
     "tsup": "^8.0.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^4.0.18"
   },
   "license": "MIT"
 }

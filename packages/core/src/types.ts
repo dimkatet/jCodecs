@@ -15,8 +15,8 @@ export interface ExtendedImageData<TMeta = unknown> {
   height: number;
   /** Bit depth per channel */
   bitDepth: 8 | 10 | 12 | 16;
-  /** Whether the image has an alpha channel */
-  hasAlpha: boolean;
+  /** Number of channels in the image */
+  channels: number;
   /** Codec-specific metadata */
   metadata: TMeta;
 }
@@ -33,7 +33,7 @@ export interface ImageInfo<TMeta = unknown> {
   width: number;
   height: number;
   bitDepth: number;
-  hasAlpha: boolean;
+  channels: number;
   metadata: TMeta;
 }
 

@@ -1,57 +1,111 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>jCodecs AVIF Example</title>
   <style>
     body {
-      font-family: system-ui, sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
       max-width: 800px;
       margin: 0 auto;
       padding: 20px;
+      background-color: #0f0f11;
+      color: #e0e0e5;
     }
+
     .container {
       display: flex;
       gap: 20px;
       flex-wrap: wrap;
     }
+
     .panel {
       flex: 1;
       min-width: 300px;
-      border: 1px solid #ccc;
-      padding: 15px;
-      border-radius: 8px;
+      background-color: #16181d;
+      border: 1px solid #33353d;
+      padding: 16px;
+      border-radius: 10px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.35);
     }
+
     canvas {
       max-width: 100%;
-      border: 1px solid #eee;
+      border: 1px solid #2a2d36;
+      border-radius: 6px;
+      background-color: #0a0a0c;
     }
+
     input[type="file"] {
-      margin: 10px 0;
+      margin: 12px 0;
+      color: #d0d0d8;
     }
-    .controls {
-      margin: 10px 0;
-    }
-    .controls label {
-      display: block;
-      margin: 5px 0;
-    }
-    button {
-      padding: 8px 16px;
-      margin: 5px;
+
+    input[type="file"]::file-selector-button {
+      background-color: #2a2d36;
+      color: #e0e0e5;
+      border: 1px solid #444850;
+      padding: 8px 14px;
+      border-radius: 6px;
       cursor: pointer;
     }
+
+    input[type="file"]::file-selector-button:hover {
+      background-color: #353a44;
+    }
+
+    .controls {
+      margin: 12px 0;
+    }
+
+    .controls label {
+      display: block;
+      margin: 8px 0;
+      color: #b0b0bd;
+    }
+
+    button {
+      padding: 9px 18px;
+      margin: 6px 4px 6px 0;
+      cursor: pointer;
+      background-color: #2a2d36;
+      color: #e0e0e5;
+      border: 1px solid #444850;
+      border-radius: 6px;
+      transition: all 0.13s ease;
+    }
+
+    button:hover {
+      background-color: #353a44;
+      border-color: #50566b;
+    }
+
+    button:active {
+      background-color: #1f2127;
+    }
+
     .info {
-      background: #f5f5f5;
-      padding: 10px;
-      margin: 10px 0;
-      border-radius: 4px;
-      font-family: monospace;
-      font-size: 12px;
+      background: #1a1c22;
+      color: #b0b8c5;
+      padding: 12px 14px;
+      margin: 12px 0;
+      border-radius: 6px;
+      border-left: 3px solid #5a7eff;
+      font-family: 'Consolas', 'Menlo', 'Monaco', monospace;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+
+    ::selection {
+      background: #3b4a7a;
+      color: white;
     }
   </style>
 </head>
+
 <body>
   <h1>jCodecs AVIF Example</h1>
   <p>Encode and decode AVIF images in the browser using WebAssembly.</p>
@@ -85,130 +139,7 @@
       <div class="info" id="outputInfo">Encode an image to see output</div>
     </div>
   </div>
-
-  <script type="module">
-    // Note: This example requires the WASM to be built first
-    // import { encode, decode, init } from '@jcodecs/avif';
-
-    const fileInput = document.getElementById('fileInput');
-    const inputCanvas = document.getElementById('inputCanvas');
-    const outputCanvas = document.getElementById('outputCanvas');
-    const inputInfo = document.getElementById('inputInfo');
-    const outputInfo = document.getElementById('outputInfo');
-    const qualitySlider = document.getElementById('quality');
-    const qualityValue = document.getElementById('qualityValue');
-    const speedSlider = document.getElementById('speed');
-    const speedValue = document.getElementById('speedValue');
-    const losslessCheckbox = document.getElementById('lossless');
-    const encodeBtn = document.getElementById('encodeBtn');
-    const downloadBtn = document.getElementById('downloadBtn');
-
-    const inputCtx = inputCanvas.getContext('2d');
-    const outputCtx = outputCanvas.getContext('2d');
-
-    let currentImageData = null;
-    let encodedAvif = null;
-
-    // Update slider values
-    qualitySlider.addEventListener('input', () => {
-      qualityValue.textContent = qualitySlider.value;
-    });
-
-    speedSlider.addEventListener('input', () => {
-      speedValue.textContent = speedSlider.value;
-    });
-
-    // Handle file input
-    fileInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      // Check if it's an AVIF file
-      if (file.name.endsWith('.avif')) {
-        inputInfo.textContent = 'AVIF decoding not yet implemented in this example';
-        return;
-      }
-
-      // Load as regular image
-      const img = new Image();
-      img.onload = () => {
-        inputCanvas.width = img.width;
-        inputCanvas.height = img.height;
-        inputCtx.drawImage(img, 0, 0);
-        currentImageData = inputCtx.getImageData(0, 0, img.width, img.height);
-
-        inputInfo.textContent = `Size: ${img.width}x${img.height}, ${file.size} bytes`;
-        encodeBtn.disabled = false;
-      };
-      img.src = URL.createObjectURL(file);
-    });
-
-    // Encode button
-    encodeBtn.addEventListener('click', async () => {
-      if (!currentImageData) return;
-
-      encodeBtn.disabled = true;
-      encodeBtn.textContent = 'Encoding...';
-
-      try {
-        // Placeholder - actual encoding would use:
-        // encodedAvif = await encode(currentImageData, {
-        //   quality: parseInt(qualitySlider.value),
-        //   speed: parseInt(speedSlider.value),
-        //   lossless: losslessCheckbox.checked,
-        // });
-
-        // For now, just show a message
-        outputInfo.textContent = 'WASM not yet built. Run: pnpm build:wasm';
-
-        // After encoding:
-        // outputInfo.textContent = `Encoded size: ${encodedAvif.length} bytes`;
-        // downloadBtn.disabled = false;
-
-        // Decode and display:
-        // const decoded = await decode(encodedAvif);
-        // const imageData = new ImageData(
-        //   new Uint8ClampedArray(decoded.data),
-        //   decoded.width,
-        //   decoded.height
-        // );
-        // outputCanvas.width = decoded.width;
-        // outputCanvas.height = decoded.height;
-        // outputCtx.putImageData(imageData, 0, 0);
-
-      } catch (err) {
-        outputInfo.textContent = `Error: ${err.message}`;
-      } finally {
-        encodeBtn.disabled = false;
-        encodeBtn.textContent = 'Encode to AVIF';
-      }
-    });
-
-    // Download button
-    downloadBtn.addEventListener('click', () => {
-      if (!encodedAvif) return;
-
-      const blob = new Blob([encodedAvif], { type: 'image/avif' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'output.avif';
-      a.click();
-      URL.revokeObjectURL(url);
-    });
-
-    // Initialize
-    async function init() {
-      try {
-        // await init();
-        console.log('jCodecs AVIF ready (placeholder)');
-      } catch (err) {
-        console.error('Failed to initialize:', err);
-        inputInfo.textContent = 'Failed to load WASM module';
-      }
-    }
-
-    init();
-  </script>
+  <script type="module" src="/main.ts"></script>
 </body>
+
 </html>

@@ -6,6 +6,8 @@ export default defineConfig({
     types: 'src/types.ts',
     memory: 'src/memory.ts',
     'worker-pool': 'src/worker-pool.ts',
+    'codec-worker': 'src/codec-worker.ts',
+    'codec-worker-client': 'src/codec-worker-client.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

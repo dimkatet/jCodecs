@@ -37,7 +37,7 @@ interface DecodeResult {
   width: number;
   height: number;
   depth: number;
-  hasAlpha: boolean;
+  channels: number;
   metadata: WASMImageMetadata;
   error: string;
   timings: object;
@@ -47,7 +47,7 @@ interface WASMImageInfo {
   width: number;
   height: number;
   depth: number;
-  hasAlpha: boolean;
+  channels: number;
   metadata: WASMImageMetadata;
 }
 
