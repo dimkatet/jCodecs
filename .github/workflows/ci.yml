@@ -12,7 +12,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: dimkatet/jcodecs/wasm-builder
+  IMAGE_NAME: dimkatet/jcodecs-wasm-cache
 
 jobs:
   # Build WASM with Docker layer caching
@@ -50,7 +50,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wasm-avif
-          path: packages/avif/src/wasm/*.{js,wasm}
+          path: |
+            packages/avif/src/wasm/*.js
+            packages/avif/src/wasm/*.wasm
           retention-days: 1
 
   # TypeScript build and tests

@@ -11,7 +11,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/wasm-builder
+  IMAGE_NAME: dimkatet/jcodecs-wasm-cache
 
 jobs:
   build-wasm:
@@ -46,7 +46,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wasm-avif
-          path: packages/avif/src/wasm/*.{js,wasm}
+          path: |
+            packages/avif/src/wasm/*.js
+            packages/avif/src/wasm/*.wasm
 
   publish:
     runs-on: ubuntu-latest
