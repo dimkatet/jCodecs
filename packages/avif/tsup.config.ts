@@ -15,6 +15,5 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   treeshake: true,
-  external: ['*.wasm', '*.wasm.js'],
   noExternal: ['@dimkatet/jcodecs-core'],
 });

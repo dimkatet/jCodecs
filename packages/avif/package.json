@@ -26,7 +26,8 @@
       "types": "./dist/worker-api.d.ts",
       "import": "./dist/worker-api.js",
       "require": "./dist/worker-api.cjs"
-    }
+    },
+    "./wasm/*": "./dist/*"
   },
   "files": [
     "dist"
@@ -35,7 +36,7 @@
   "scripts": {
     "build": "pnpm build:wasm && pnpm build:ts",
     "build:wasm": "docker build --target avif --output type=local,dest=src/wasm -f ../../Dockerfile ../..",
-    "build:ts": "tsup && cp src/wasm/*.wasm src/wasm/*.js dist/",
+    "build:ts": "tsup && cp src/wasm/*.js dist/",
     "dev": "tsup --watch",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",

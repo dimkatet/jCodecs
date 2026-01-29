@@ -7,8 +7,8 @@ import { decode, init as initDecoder } from './decode';
 
 createCodecWorker({
   init: async (payload: unknown) => {
-    const { decoderWasmUrl } = payload as { decoderWasmUrl?: string };
-    await initDecoder(decoderWasmUrl);
+    const { decoderJsUrl } = payload as { decoderJsUrl?: string };
+    await initDecoder({ jsUrl: decoderJsUrl });
   },
   encode: (payload: unknown) => {
     const { imageData, options } = payload as { imageData: any; options?: any };

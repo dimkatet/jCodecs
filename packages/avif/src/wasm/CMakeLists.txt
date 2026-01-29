@@ -31,6 +31,7 @@ set(COMMON_LINK_FLAGS
     "-s DYNAMIC_EXECUTION=0"
     "-s EXPORTED_FUNCTIONS=['_malloc','_free']"
     "-s EMBIND_STD_STRING_IS_UTF8=0"
+    "-s SINGLE_FILE=1"
     "--bind"
     "-msimd128"
     "-O3"
@@ -41,7 +42,7 @@ set(COMMON_LINK_FLAGS
 set(MT_FLAGS
     "-pthread"
     "-s USE_PTHREADS=1"
-    "-s PTHREAD_POOL_SIZE=\"navigator.hardwareConcurrency || 4\""
+    "-s PTHREAD_POOL_SIZE=\"Math.min(navigator.hardwareConcurrency || 4, 8)\""
 )
 
 string(REPLACE ";" " " COMMON_LINK_FLAGS_STR "${COMMON_LINK_FLAGS}")

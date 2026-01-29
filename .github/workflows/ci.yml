@@ -50,9 +50,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wasm-avif
-          path: |
-            packages/avif/src/wasm/*.js
-            packages/avif/src/wasm/*.wasm
+          path: packages/avif/src/wasm/*.js
           retention-days: 1
 
   # TypeScript build and tests

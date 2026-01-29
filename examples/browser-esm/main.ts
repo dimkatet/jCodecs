@@ -1,4 +1,8 @@
-import { decodeInWorker, initWorkerPool, getWorkerPoolStats } from "@dimkatet/jcodecs-avif";
+import {
+  decodeInWorker,
+  initWorkerPool,
+  getWorkerPoolStats,
+} from "@dimkatet/jcodecs-avif";
 
 const fileInput = document.getElementById("fileInput");
 const inputCanvas = document.getElementById("inputCanvas");
@@ -40,15 +44,17 @@ fileInput.addEventListener("change", async (e) => {
     const buffer = await file.arrayBuffer();
 
     console.log("Decoding AVIF in worker...");
-    
+
     const start = performance.now();
-    const { metadata, width, height, bitDepth } = await decodeInWorker(buffer, { useThreads: false });
+    const { metadata, width, height, bitDepth } = await decodeInWorker(buffer);
 
     const elapsed = performance.now() - start;
     console.log(`Worker decode completed in ${elapsed.toFixed(2)}ms`);
     console.log("Worker pool stats:", getWorkerPoolStats());
 
-    inputInfo.textContent = `${width}x${height}, ${bitDepth}-bit, ${metadata.isHDR ? 'HDR' : 'SDR'} (${elapsed.toFixed(0)}ms)`;
+    inputInfo.textContent = `${width}x${height}, ${bitDepth}-bit, ${
+      metadata.isHDR ? "HDR" : "SDR"
+    } (${elapsed.toFixed(0)}ms)`;
     return;
   }
 
@@ -121,7 +127,7 @@ downloadBtn!.addEventListener("click", () => {
 // Initialize
 async function initModules() {
   try {
-    await initWorkerPool({ poolSize: 18 });
+    await initWorkerPool({ poolSize: 1 });
     console.log("jCodecs AVIF Worker Pool ready");
     console.log("Pool stats:", getWorkerPoolStats());
   } catch (err) {

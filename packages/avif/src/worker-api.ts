@@ -2,22 +2,37 @@
  * Worker API for AVIF encoding/decoding
  */
 import { CodecWorkerClient } from '@dimkatet/jcodecs-core/codec-worker-client';
+import { isMultiThreadSupported } from './decode';
 import type { AVIFEncodeOptions, AVIFDecodeOptions } from './options';
 import type { AVIFImageData } from './types';
 
 const client = new CodecWorkerClient();
 
-export async function initWorkerPool(config?: {
+// Default URLs - auto-detect MT support (WASM is embedded via SINGLE_FILE)
+const defaultWorkerUrl = new URL('./worker.js', import.meta.url);
+const defaultMtJsUrl = new URL('./avif_dec_mt.js', import.meta.url).href;
+const defaultStJsUrl = new URL('./avif_dec.js', import.meta.url).href;
+
+export interface WorkerPoolConfig {
+  /** Number of workers in the pool */
   poolSize?: number;
+  /** Custom URL for the worker script */
   workerUrl?: string | URL;
-  wasmUrls?: { encoder?: string; decoder?: string };
-}): Promise<void> {
+  /** Custom URL for decoder JS (WASM is embedded) */
+  decoderJsUrl?: string;
+}
+
+export async function initWorkerPool(config?: WorkerPoolConfig): Promise<void> {
+  // Auto-detect: use MT if supported and no custom URL provided
+  const useMT = config?.decoderJsUrl
+    ? config.decoderJsUrl.includes("_mt")
+    : isMultiThreadSupported();
+
   return client.init({
-    workerUrl: config?.workerUrl ?? new URL('./worker.js', import.meta.url),
+    workerUrl: config?.workerUrl ?? defaultWorkerUrl,
     poolSize: config?.poolSize,
     initPayload: {
-      encoderWasmUrl: config?.wasmUrls?.encoder,
-      decoderWasmUrl: config?.wasmUrls?.decoder,
+      decoderJsUrl: config?.decoderJsUrl ?? (useMT ? defaultMtJsUrl : defaultStJsUrl),
     },
   });
 }

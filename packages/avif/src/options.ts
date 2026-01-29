@@ -114,14 +114,8 @@ export interface AVIFDecodeOptions {
   ignoreColorProfile?: boolean;
 
   /**
-   * Use multi-threading for decoding if available.
-   * @default true
-   */
-  useThreads?: boolean;
-
-  /**
-   * Maximum number of threads to use.
-   * 0 = auto (use all available cores).
+   * Maximum number of threads to use (only effective with MT decoder).
+   * 0 = auto (libavif decides based on image size and available cores).
    * @default 0
    */
   maxThreads?: number;
@@ -150,6 +144,5 @@ export const DEFAULT_ENCODE_OPTIONS: Required<
 export const DEFAULT_DECODE_OPTIONS: Required<AVIFDecodeOptions> = {
   bitDepth: 0,
   ignoreColorProfile: false,
-  useThreads: true,
   maxThreads: 0,
 };

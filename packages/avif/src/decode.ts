@@ -20,7 +20,7 @@ type ModuleFactory = (
 ) => Promise<AVIFDecoderModule>;
 
 let decoderModule: AVIFDecoderModule | null = null;
-let decoderModuleMT: AVIFDecoderModule | null = null;
+let isMultiThreadedModule = false;
 let initPromise: Promise<void> | null = null;
 
 // Profiling
@@ -59,7 +59,10 @@ function logProfile(profile: DecodeProfile): void {
   );
 }
 
-function isSharedArrayBufferAvailable(): boolean {
+/**
+ * Check if SharedArrayBuffer is available (required for multi-threaded decoding)
+ */
+export function isMultiThreadSupported(): boolean {
   try {
     return typeof SharedArrayBuffer !== "undefined";
   } catch {
@@ -67,7 +70,20 @@ function isSharedArrayBufferAvailable(): boolean {
   }
 }
 
-export async function init(wasmUrl?: string): Promise<void> {
+// Default URLs - auto-detect MT support (WASM is embedded via SINGLE_FILE)
+const defaultMtJsUrl = new URL('./avif_dec_mt.js', import.meta.url).href;
+const defaultStJsUrl = new URL('./avif_dec.js', import.meta.url).href;
+
+export interface InitConfig {
+  /** URL to the decoder JS file (avif_dec.js or avif_dec_mt.js). WASM is embedded. */
+  jsUrl?: string;
+}
+
+/**
+ * Initialize the AVIF decoder module.
+ * Auto-detects MT support when no URL provided.
+ */
+export async function init(config?: InitConfig): Promise<void> {
   if (decoderModule) return;
 
   if (initPromise) {
@@ -75,32 +91,20 @@ export async function init(wasmUrl?: string): Promise<void> {
     return;
   }
 
+  // Auto-detect: use MT if supported and no custom URL provided
+  const useMT = config?.jsUrl ? config.jsUrl.includes("_mt") : isMultiThreadSupported();
+  const jsUrl = config?.jsUrl ?? (useMT ? defaultMtJsUrl : defaultStJsUrl);
+
   initPromise = (async () => {
-    const moduleConfig: Record<string, unknown> = {};
+    // mainScriptUrlOrBlob needed for pthread workers to find the main JS file
+    const moduleConfig: Record<string, unknown> = {
+      mainScriptUrlOrBlob: jsUrl,
+    };
 
-    if (wasmUrl) {
-      moduleConfig.locateFile = (path: string) => {
-        if (path.endsWith(".wasm")) return wasmUrl;
-        return path;
-      };
-    }
-
-    if (isSharedArrayBufferAvailable()) {
-      try {
-        const createMTModule = (await import("./wasm/avif_dec_mt.js"))
-          .default as ModuleFactory;
-        decoderModuleMT = await createMTModule(moduleConfig);
-      } catch (e) {
-        console.warn("AVIF multi-threaded decoder not available");
-        const createModule = (await import("./wasm/avif_dec.js"))
-          .default as ModuleFactory;
-        decoderModule = await createModule(moduleConfig);
-      }
-    } else {
-      const createModule = (await import("./wasm/avif_dec.js"))
-        .default as ModuleFactory;
-      decoderModule = await createModule(moduleConfig);
-    }
+    const module = await import(/* @vite-ignore */ jsUrl);
+    const createModule = module.default as ModuleFactory;
+    decoderModule = await createModule(moduleConfig);
+    isMultiThreadedModule = useMT;
   })();
 
   await initPromise;
@@ -174,12 +178,15 @@ export async function decode(
   const data = input instanceof ArrayBuffer ? new Uint8Array(input) : input;
   const opts = { ...DEFAULT_DECODE_OPTIONS, ...options };
 
-  const useMT = opts.useThreads && decoderModuleMT;
-  const module: AVIFDecoderModule = decoderModuleMT || decoderModule!;
+  // Warn if MT requested but not available
+  if (!isMultiThreadedModule && opts.maxThreads && opts.maxThreads > 1) {
+    console.warn(
+      "[jcodecs-avif] maxThreads > 1 requested but SharedArrayBuffer is not available. Using single-threaded decoding.",
+    );
+  }
 
-  const maxThreads = useMT
-    ? opts.maxThreads ?? navigator.hardwareConcurrency ?? 4
-    : 1;
+  const module = decoderModule!;
+  const maxThreads = isMultiThreadedModule ? (opts.maxThreads ?? 0) : 1;
 
   // Copy input data to WASM heap
   const t1 = profilingEnabled ? performance.now() : 0;
@@ -283,7 +290,7 @@ export async function getImageInfo(
   await init();
 
   const data = input instanceof ArrayBuffer ? new Uint8Array(input) : input;
-  const module = decoderModuleMT || decoderModule!;
+  const module = decoderModule!;
 
   // Copy input data to WASM heap
   const inputPtr = copyToWasm(module, data);
@@ -309,5 +316,5 @@ export function isInitialized(): boolean {
 }
 
 export function isMultiThreaded(): boolean {
-  return decoderModuleMT !== null;
+  return isMultiThreadedModule;
 }

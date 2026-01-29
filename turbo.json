@@ -4,7 +4,7 @@
     "build:wasm": {
       "cache": false,
       "inputs": ["src/wasm/**", "../../Dockerfile", "../../emscripten-cross.txt"],
-      "outputs": ["src/wasm/*.js", "src/wasm/*.wasm"]
+      "outputs": ["src/wasm/*.js"]
     },
     "build:ts": {
       "dependsOn": ["^build:ts"],

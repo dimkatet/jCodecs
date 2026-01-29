@@ -112,9 +112,7 @@ RUN emcmake cmake /src/avif-wasm \
 # === AVIF: Output stage (only artifacts) ===
 FROM scratch AS avif
 COPY --from=avif-build /build/avif-wasm/avif_dec.js /
-COPY --from=avif-build /build/avif-wasm/avif_dec.wasm /
 COPY --from=avif-build /build/avif-wasm/avif_dec_mt.js /
-COPY --from=avif-build /build/avif-wasm/avif_dec_mt.wasm /
 
 # === JXL: (placeholder for future) ===
 # FROM common AS jxl-build
