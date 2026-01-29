@@ -5,18 +5,22 @@
   "description": "Image codecs for the browser using WebAssembly",
   "type": "module",
   "scripts": {
-    "build": "turbo build --filter=./packages/*",
-    "build:wasm": "turbo build:wasm --filter=./packages/*",
-    "build:ts": "turbo build:ts --filter=./packages/*",
+    "build": "turbo build --filter @dimkatet/*",
+    "build:wasm": "turbo build:wasm --filter @dimkatet/*",
+    "build:ts": "turbo build:ts --filter @dimkatet/*",
     "build:avif": "pnpm --filter @dimkatet/jcodecs-avif build",
-    "dev": "turbo dev",
+    "dev": "turbo dev --filter @examples/*",
     "test": "turbo test",
     "test:browser": "pnpm vitest --config vitest.browser.config.ts --no-watch",
     "typecheck": "turbo typecheck",
     "clean": "turbo clean && rm -rf node_modules",
-    "clean:wasm": "rm -rf packages/*/wasm/*.wasm packages/*/wasm/*.js"
+    "clean:wasm": "rm -rf packages/*/wasm/*.wasm packages/*/wasm/*.js",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "changeset publish"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.8",
     "@types/node": "^20.11.0",
     "@vitest/browser-playwright": "^4.0.18",
     "playwright": "^1.58.0",
