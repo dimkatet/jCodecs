@@ -11,8 +11,8 @@ export default defineConfig({
       // Subpath exports must come before main export
       "@dimkatet/jcodecs-core/codec-worker": resolve(__dirname, "packages/core/src/codec-worker.ts"),
       "@dimkatet/jcodecs-core/codec-worker-client": resolve(__dirname, "packages/core/src/codec-worker-client.ts"),
-      "@dimkatet/jcodecs-core": resolve(__dirname, "packages/core/src/index.ts"),
-      "@dimkatet/jcodecs-avif": resolve(__dirname, "packages/avif/src/index.ts"),
+      "@dimkatet/jcodecs-core": resolve(__dirname, "./packages/core/dist/index.js"),
+      "@dimkatet/jcodecs-avif": resolve(__dirname, "./packages/avif/dist/index.js"),
     },
   },
 

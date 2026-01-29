@@ -11,7 +11,7 @@
     "build:avif": "pnpm --filter @dimkatet/jcodecs-avif build",
     "dev": "turbo dev --filter @examples/*",
     "test": "turbo test",
-    "test:browser": "pnpm vitest --config vitest.browser.config.ts --no-watch",
+    "test:browser": "turbo build:ts && vitest --config vitest.browser.config.ts --no-watch",
     "typecheck": "turbo typecheck",
     "clean": "turbo clean && rm -rf node_modules",
     "clean:wasm": "rm -rf packages/*/wasm/*.wasm packages/*/wasm/*.js",

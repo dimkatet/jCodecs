@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeAll } from "vitest";
-import { decode, getImageInfo, init } from "@dimkatet/jcodecs-avif";
+import { decode, getImageInfo, initDecoder } from "@dimkatet/jcodecs-avif";
 import type { AVIFImageData, AVIFImageInfo } from "@dimkatet/jcodecs-avif";
 
 async function loadFixture(filename: string): Promise<Uint8Array> {
@@ -20,7 +20,7 @@ async function loadFixture(filename: string): Promise<Uint8Array> {
 
 describe("AVIF Decoder", () => {
   beforeAll(async () => {
-    await init();
+    await initDecoder();
   });
 
   describe("SDR sRGB image (colors_sdr_srgb.avif)", () => {
