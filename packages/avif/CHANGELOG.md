@@ -1,5 +1,11 @@
 # @dimkatet/jcodecs-avif
 
+## 0.2.1
+
+### Patch Changes
+
+- fix: bundle @jcodecs/core into worker.js to make it self-contained
+
 ## 0.2.0
 
 ### Minor Changes
