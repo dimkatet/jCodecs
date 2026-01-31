@@ -6,24 +6,14 @@
  * auto-detects transferables in responses.
  */
 
-export type CodecWorkerHandlers = {
-  init: (payload: unknown) => void | Promise<void>;
-} & {
-  [method: string]: (payload: unknown) => unknown | Promise<unknown>;
-};
-
-interface WorkerInboundMessage {
-  type: string;
-  id: number;
-  payload: unknown;
-}
+import { CodecWorkerHandlers, RefineHandlers, WorkerInboundMessage } from "./protocol";
 
 /**
  * Walk a result object one level deep, collecting ArrayBuffer instances
  * for use as transferables in postMessage.
  */
 function collectTransferables(result: unknown): Transferable[] {
-  if (result == null || typeof result !== 'object') {
+  if (result == null || typeof result !== "object") {
     return [];
   }
 
@@ -56,25 +46,27 @@ function collectTransferables(result: unknown): Transferable[] {
  *   with auto-detected transferables
  * - On error: sends { id, success: false, error }
  */
-export function createCodecWorker(handlers: CodecWorkerHandlers): void {
+export function createCodecWorker<H extends CodecWorkerHandlers>(
+  handlers: RefineHandlers<H>
+): void {
   const ctx = self as unknown as Worker;
   let initialized = false;
 
   ctx.addEventListener(
-    'message',
-    async (e: MessageEvent<WorkerInboundMessage>) => {
+    "message",
+    async (e: MessageEvent<WorkerInboundMessage<RefineHandlers<H>>>) => {
       const { type, id, payload } = e.data;
 
       try {
-        if (type === 'init') {
+        if (type === "init") {
           await handlers.init(payload);
           initialized = true;
-          ctx.postMessage({ type: 'ready' });
+          ctx.postMessage({ type: "ready" });
           return;
         }
 
         if (!initialized) {
-          throw new Error('Worker not initialized. Call init() first.');
+          throw new Error("Worker not initialized. Call init() first.");
         }
 
         const handler = handlers[type];
@@ -95,5 +87,5 @@ export function createCodecWorker(handlers: CodecWorkerHandlers): void {
     },
   );
 
-  ctx.postMessage({ type: 'loaded' });
+  ctx.postMessage({ type: "loaded" });
 }

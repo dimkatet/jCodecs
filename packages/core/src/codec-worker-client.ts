@@ -5,19 +5,22 @@
  * method invocation. Each codec creates one module-level instance.
  */
 
-import { WorkerPool } from './worker-pool';
-import type { WorkerTask } from './worker-pool';
+import { CodecWorkerHandlers, InitPayloadType } from "./protocol";
+import { WorkerPool } from "./worker-pool";
+import type { WorkerTask } from "./worker-pool";
 
-export interface CodecWorkerClientConfig {
+export interface CodecWorkerClientConfig<P = unknown> {
   /** URL to the worker script */
   workerUrl: string | URL;
   /** Number of workers in the pool (defaults to navigator.hardwareConcurrency) */
   poolSize?: number;
   /** Payload sent as the 'init' message to each worker */
-  initPayload?: unknown;
+  initPayload?: P;
 }
 
-export class CodecWorkerClient {
+export class CodecWorkerClient<
+  H extends CodecWorkerHandlers = CodecWorkerHandlers,
+> {
   private pool: WorkerPool | null = null;
   private config: CodecWorkerClientConfig | null = null;
 
@@ -25,7 +28,7 @@ export class CodecWorkerClient {
    * Initialize the worker pool.
    * Idempotent — subsequent calls are no-ops if already initialized.
    */
-  async init(config?: CodecWorkerClientConfig): Promise<void> {
+  async init(config?: CodecWorkerClientConfig<InitPayloadType<H>>): Promise<void> {
     if (this.pool) return;
 
     if (config) {
@@ -34,24 +37,21 @@ export class CodecWorkerClient {
 
     if (!this.config) {
       throw new Error(
-        'CodecWorkerClient: config is required on first init() call',
+        "CodecWorkerClient: config is required on first init() call",
       );
     }
 
     const { workerUrl, poolSize, initPayload } = this.config;
 
-    this.pool = new WorkerPool(
-      () => {
-        const worker = new Worker(workerUrl, { type: 'module' });
-        worker.postMessage({
-          type: 'init',
-          id: -1,
-          payload: initPayload,
-        });
-        return worker;
-      },
-      poolSize,
-    );
+    this.pool = new WorkerPool(() => {
+      const worker = new Worker(workerUrl, { type: "module" });
+      worker.postMessage({
+        type: "init",
+        id: -1,
+        payload: initPayload,
+      });
+      return worker;
+    }, poolSize);
 
     await this.pool.init();
   }
@@ -60,22 +60,21 @@ export class CodecWorkerClient {
    * Invoke a method on a worker.
    * Auto-initializes the pool if not yet initialized.
    */
-  async call<TResult = unknown>(
-    method: string,
-    payload: unknown,
+  async call<K extends Exclude<keyof H, "init">>(
+    method: K,
+    payload: Parameters<H[K]>[0],
     transferables?: Transferable[],
-  ): Promise<TResult> {
+  ): Promise<Awaited<ReturnType<H[K]>>> {
     if (!this.pool) {
       await this.init();
     }
 
-    const task: WorkerTask<unknown> = {
-      type: method,
+    const task: WorkerTask<Parameters<H[K]>[0]> = {
+      type: method as string,
       payload,
       transferables,
     };
-
-    return this.pool!.execute(task) as Promise<TResult>;
+    return this.pool!.execute(task) as Promise<Awaited<ReturnType<H[K]>>>;
   }
 
   getStats(): {

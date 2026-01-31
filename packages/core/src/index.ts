@@ -17,6 +17,7 @@ export type { WorkerTask, WorkerResult } from './worker-pool';
 
 // Codec worker helpers
 export { createCodecWorker } from './codec-worker';
-export type { CodecWorkerHandlers } from './codec-worker';
 export { CodecWorkerClient } from './codec-worker-client';
 export type { CodecWorkerClientConfig } from './codec-worker-client';
+
+export type { CodecWorkerHandlers, CodecWorkerMethods } from './protocol';

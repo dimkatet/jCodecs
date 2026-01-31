@@ -1,5 +1,11 @@
 # @dimkatet/jcodecs-core
 
+## 0.3.0
+
+### Minor Changes
+
+- Refactored codec worker protocol typings to use discriminated unions for message handling.
+
 ## 0.2.0
 
 ### Minor Changes
