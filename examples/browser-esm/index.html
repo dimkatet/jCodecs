@@ -66,6 +66,15 @@
       color: #b0b0bd;
     }
 
+    select {
+      background-color: #2a2d36;
+      color: #e0e0e5;
+      border: 1px solid #444850;
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-left: 8px;
+    }
+
     button {
       padding: 9px 18px;
       margin: 6px 4px 6px 0;
@@ -128,6 +137,39 @@
         <label>
           Speed: <input type="range" id="speed" min="0" max="10" value="6">
           <span id="speedValue">6</span>
+        </label>
+        <label>
+          Bit Depth:
+          <select id="bitDepth">
+            <option value="8">8-bit</option>
+            <option value="10">10-bit</option>
+            <option value="12">12-bit</option>
+          </select>
+        </label>
+        <label>
+          Chroma:
+          <select id="chroma">
+            <option value="4:2:0">4:2:0</option>
+            <option value="4:2:2">4:2:2</option>
+            <option value="4:4:4">4:4:4</option>
+          </select>
+        </label>
+        <label>
+          Transfer:
+          <select id="transfer">
+            <option value="srgb">sRGB</option>
+            <option value="pq">PQ (HDR10)</option>
+            <option value="hlg">HLG</option>
+            <option value="linear">Linear</option>
+          </select>
+        </label>
+        <label>
+          Color Space:
+          <select id="colorSpace">
+            <option value="srgb">sRGB</option>
+            <option value="display-p3">Display P3</option>
+            <option value="rec2020">Rec.2020</option>
+          </select>
         </label>
         <label>
           <input type="checkbox" id="lossless"> Lossless

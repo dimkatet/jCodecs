@@ -10,6 +10,7 @@
     "build:ts": "turbo build:ts --filter @dimkatet/*",
     "build:avif": "pnpm --filter @dimkatet/jcodecs-avif build",
     "dev": "turbo dev --filter @examples/*",
+    "dev:example": "turbo dev --filter @examples/*",
     "test": "turbo test",
     "test:browser": "turbo build:ts && vitest --config vitest.browser.config.ts --no-watch",
     "typecheck": "turbo typecheck",
