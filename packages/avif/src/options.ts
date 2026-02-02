@@ -17,6 +17,11 @@ export type ColorSpace = 'srgb' | 'display-p3' | 'rec2020';
 export type EncoderTune = 'default' | 'ssim' | 'psnr';
 
 /**
+ * Transfer function (OETF) options
+ */
+export type TransferFunctionOption = 'srgb' | 'pq' | 'hlg' | 'linear';
+
+/**
  * AVIF encoding options
  */
 export interface AVIFEncodeOptions {
@@ -62,6 +67,16 @@ export interface AVIFEncodeOptions {
   colorSpace?: ColorSpace;
 
   /**
+   * Transfer function (OETF) for HDR content.
+   * - 'srgb': Standard sRGB gamma (~2.2)
+   * - 'pq': Perceptual Quantizer (HDR10, Dolby Vision)
+   * - 'hlg': Hybrid Log-Gamma (broadcast HDR)
+   * - 'linear': Linear light (for compositing)
+   * @default 'srgb'
+   */
+  transferFunction?: TransferFunctionOption;
+
+  /**
    * Enable lossless encoding.
    * When true, quality setting is ignored and chroma subsampling is set to 4:4:4.
    * @default false
@@ -73,7 +88,7 @@ export interface AVIFEncodeOptions {
    * Note: Multi-threading requires SharedArrayBuffer support.
    * @default 0
    */
-  threads?: number;
+  maxThreads?: number;
 
   /**
    * Encoder tuning mode.
@@ -133,8 +148,9 @@ export const DEFAULT_ENCODE_OPTIONS: Required<
   chromaSubsampling: '4:2:0',
   bitDepth: 8,
   colorSpace: 'srgb',
+  transferFunction: 'srgb',
   lossless: false,
-  threads: 0,
+  maxThreads: 0,
   tune: 'default',
 };
 

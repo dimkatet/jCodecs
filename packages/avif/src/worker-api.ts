@@ -1,50 +1,63 @@
 /**
  * Worker API for AVIF encoding/decoding
  */
-import { CodecWorkerClient } from '@dimkatet/jcodecs-core/codec-worker-client';
-import { isMultiThreadSupported } from './decode';
-import type { AVIFEncodeOptions, AVIFDecodeOptions } from './options';
-import type { AVIFImageData } from './types';
-
-const client = new CodecWorkerClient();
+import { CodecWorkerClient } from "@dimkatet/jcodecs-core/codec-worker-client";
+import { isMultiThreadSupported } from "./decode";
+import type { AVIFEncodeOptions, AVIFDecodeOptions } from "./options";
+import type { AVIFImageData } from "./types";
+import type { AVIFWorkerHandlers, WorkerInitPayload } from "./worker";
 
 // Default URLs - auto-detect MT support (WASM is embedded via SINGLE_FILE)
-const defaultWorkerUrl = new URL('./worker.js', import.meta.url);
-const defaultMtJsUrl = new URL('./avif_dec_mt.js', import.meta.url).href;
-const defaultStJsUrl = new URL('./avif_dec.js', import.meta.url).href;
+const defaultWorkerUrl = new URL("./worker.js", import.meta.url);
+const mtDecoderUrl = new URL("./avif_dec_mt.js", import.meta.url).href;
+const stDecoderUrl = new URL("./avif_dec.js", import.meta.url).href;
+const mtEncoderUrl = new URL("./avif_enc_mt.js", import.meta.url).href;
+const stEncoderUrl = new URL("./avif_enc.js", import.meta.url).href;
 
-export interface WorkerPoolConfig {
+export interface WorkerPoolConfig extends WorkerInitPayload {
   /** Number of workers in the pool */
   poolSize?: number;
   /** Custom URL for the worker script */
   workerUrl?: string | URL;
-  /** Custom URL for decoder JS (WASM is embedded) */
-  decoderJsUrl?: string;
+  /** Prefer to use of multi-threaded decoder */
+  preferMT?: boolean;
 }
 
-export async function initWorkerPool(config?: WorkerPoolConfig): Promise<void> {
-  // Auto-detect: use MT if supported and no custom URL provided
-  const useMT = config?.decoderJsUrl
-    ? config.decoderJsUrl.includes("_mt")
-    : isMultiThreadSupported();
+export type AVIFWorkerClient = CodecWorkerClient<AVIFWorkerHandlers>;
 
-  return client.init({
+export async function createWorkerPool(
+  config?: WorkerPoolConfig,
+): Promise<AVIFWorkerClient> {
+  const client = new CodecWorkerClient<AVIFWorkerHandlers>();
+  const useMT = isMultiThreadSupported() && config?.preferMT;
+  
+  const decoderUrl = useMT ? mtDecoderUrl : stDecoderUrl;
+  const encoderUrl = useMT ? mtEncoderUrl : stEncoderUrl;
+
+  await client.init({
     workerUrl: config?.workerUrl ?? defaultWorkerUrl,
     poolSize: config?.poolSize,
     initPayload: {
-      decoderJsUrl: config?.decoderJsUrl ?? (useMT ? defaultMtJsUrl : defaultStJsUrl),
+      ...config,
+      decoderUrl,
+      encoderUrl,
     },
   });
+
+  return client;
 }
 
 export async function encodeInWorker(
-  imageData: ImageData | AVIFImageData,
+  client: AVIFWorkerClient,
+  imageData: AVIFImageData,
   options?: AVIFEncodeOptions,
 ): Promise<Uint8Array> {
-  return client.call<Uint8Array>('encode', { imageData, options });
+
+  return client.call("encode", { imageData, options });
 }
 
 export async function decodeInWorker(
+  client: AVIFWorkerClient,
   input: Uint8Array | ArrayBuffer,
   options?: AVIFDecodeOptions,
 ): Promise<AVIFImageData> {
@@ -52,12 +65,18 @@ export async function decodeInWorker(
     input instanceof ArrayBuffer
       ? new Uint8Array(input.slice(0))
       : new Uint8Array(
-          input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength),
+          input.buffer.slice(
+            input.byteOffset,
+            input.byteOffset + input.byteLength,
+          ),
         );
 
-  return client.call<AVIFImageData>('decode', { data, options }, [data.buffer]);
+  return client.call("decode", { data, options }, [data.buffer]);
 }
 
-export const getWorkerPoolStats = () => client.getStats();
-export const terminateWorkerPool = () => client.terminate();
-export const isWorkerPoolInitialized = () => client.isInitialized();
+export const getWorkerPoolStats = (client: AVIFWorkerClient) =>
+  client.getStats();
+export const terminateWorkerPool = (client: AVIFWorkerClient) =>
+  client.terminate();
+export const isWorkerPoolInitialized = (client: AVIFWorkerClient) =>
+  client.isInitialized();

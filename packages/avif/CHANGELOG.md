@@ -1,5 +1,34 @@
 # @dimkatet/jcodecs-avif
 
+## 0.4.0
+
+### Minor Changes
+
+- - - **AVIF Encoder**: Full multi-threaded encoding support via libavif + aom
+
+      - Single-threaded and multi-threaded (8 threads) variants
+      - HDR encoding (10/12-bit, PQ, HLG, Rec.2020)
+      - Quality, speed, and chroma subsampling controls
+
+    - **Thread Safety**: Implemented maxThreads validation to prevent deadlock
+
+      - MAX_THREADS constant (8) exported from WASM via Embind
+      - Automatic clamping when maxThreads exceeds PTHREAD_POOL_SIZE
+      - Runtime warnings for invalid configurations
+
+    - **Worker Pool Improvements**: Enhanced worker API with flexible configuration
+      - Separate pools for encoder/decoder with optimal strategies
+      - `type` parameter: 'decoder' | 'encoder' | 'both'
+      - Lazy initialization support
+      - Full TypeScript type safety via generics
+
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @dimkatet/jcodecs-core@0.3.0
+
 ## 0.3.0
 
 ### Minor Changes

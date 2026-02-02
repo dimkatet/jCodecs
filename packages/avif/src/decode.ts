@@ -10,17 +10,16 @@ import type {
   MatrixCoefficients,
 } from "./types";
 import type {
-  AVIFDecoderModule,
-  WASMImageMetadata,
-  WASMMasteringDisplay,
+  MainModule,
+  ImageMetadata,
+  MasteringDisplay as WASMMasteringDisplay,
 } from "./wasm/avif_dec";
 
-type ModuleFactory = (
-  config?: Record<string, unknown>,
-) => Promise<AVIFDecoderModule>;
+type WasmModule = typeof import("./wasm/avif_dec_mt");
 
-let decoderModule: AVIFDecoderModule | null = null;
+let decoderModule: MainModule | null = null;
 let isMultiThreadedModule = false;
+let maxThreads = 1;
 let initPromise: Promise<void> | null = null;
 
 // Profiling
@@ -48,7 +47,9 @@ function logProfile(profile: DecodeProfile): void {
   console.log(
     `[AVIF Decode Profile] ${profile.dimensions} @ ${profile.bitDepth}bit\n` +
       `  Input:          ${(profile.inputSize / 1024).toFixed(1)} KB\n` +
-      `  Output:         ${(profile.outputSize / 1024 / 1024).toFixed(2)} MB\n` +
+      `  Output:         ${(profile.outputSize / 1024 / 1024).toFixed(
+        2,
+      )} MB\n` +
       `  ─────────────────────────────\n` +
       `  Copy to WASM:   ${profile.copyToWasm.toFixed(2)} ms\n` +
       `  WASM decode:    ${profile.wasmDecode.toFixed(2)} ms\n` +
@@ -71,19 +72,21 @@ export function isMultiThreadSupported(): boolean {
 }
 
 // Default URLs - auto-detect MT support (WASM is embedded via SINGLE_FILE)
-const defaultMtJsUrl = new URL('./avif_dec_mt.js', import.meta.url).href;
-const defaultStJsUrl = new URL('./avif_dec.js', import.meta.url).href;
+const defaultMtJsUrl = new URL("./avif_dec_mt.js", import.meta.url).href;
+const defaultStJsUrl = new URL("./avif_dec.js", import.meta.url).href;
 
 export interface InitConfig {
   /** URL to the decoder JS file (avif_dec.js or avif_dec_mt.js). WASM is embedded. */
   jsUrl?: string;
+  /** Prefer to use of multi-threaded decoder */
+  preferMT?: boolean;
 }
 
 /**
  * Initialize the AVIF decoder module.
  * Auto-detects MT support when no URL provided.
  */
-export async function init(config?: InitConfig): Promise<void> {
+export async function init({ jsUrl, preferMT }: InitConfig = {}): Promise<void> {
   if (decoderModule) return;
 
   if (initPromise) {
@@ -91,20 +94,20 @@ export async function init(config?: InitConfig): Promise<void> {
     return;
   }
 
-  // Auto-detect: use MT if supported and no custom URL provided
-  const useMT = config?.jsUrl ? config.jsUrl.includes("_mt") : isMultiThreadSupported();
-  const jsUrl = config?.jsUrl ?? (useMT ? defaultMtJsUrl : defaultStJsUrl);
+  const useMT = preferMT && isMultiThreadSupported();
+  const url = jsUrl ?? (useMT ? defaultMtJsUrl : defaultStJsUrl);
 
   initPromise = (async () => {
+    isMultiThreadedModule = jsUrl ? jsUrl.includes("_mt") : !!useMT;
     // mainScriptUrlOrBlob needed for pthread workers to find the main JS file
     const moduleConfig: Record<string, unknown> = {
-      mainScriptUrlOrBlob: jsUrl,
+      mainScriptUrlOrBlob: isMultiThreadedModule ? url : undefined,
     };
 
-    const module = await import(/* @vite-ignore */ jsUrl);
-    const createModule = module.default as ModuleFactory;
+    const module: WasmModule = await import(/* @vite-ignore */ url);
+    const createModule = module.default;
     decoderModule = await createModule(moduleConfig);
-    isMultiThreadedModule = useMT;
+    maxThreads = decoderModule.MAX_THREADS ?? 1;
   })();
 
   await initPromise;
@@ -113,7 +116,7 @@ export async function init(config?: InitConfig): Promise<void> {
 /**
  * Copy data to WASM heap and return pointer
  */
-function copyToWasm(module: AVIFDecoderModule, data: Uint8Array): number {
+function copyToWasm(module: MainModule, data: Uint8Array): number {
   const ptr = module._malloc(data.length);
   module.HEAPU8.set(data, ptr);
   return ptr;
@@ -139,8 +142,8 @@ function convertMasteringDisplay(
 }
 
 function convertMetadata(
-  wasm: WASMImageMetadata,
-  module: AVIFDecoderModule,
+  wasm: ImageMetadata,
+  module: MainModule,
 ): AVIFMetadata {
   // Copy ICC profile from WASM heap in one bulk operation
   let iccProfile: Uint8Array | undefined;
@@ -171,22 +174,25 @@ function convertMetadata(
 export async function decode(
   input: Uint8Array | ArrayBuffer,
   options: AVIFDecodeOptions = {},
+  config?: InitConfig,
 ): Promise<AVIFImageData> {
-  await init();
+  await init(config);
   const t0 = profilingEnabled ? performance.now() : 0;
 
   const data = input instanceof ArrayBuffer ? new Uint8Array(input) : input;
   const opts = { ...DEFAULT_DECODE_OPTIONS, ...options };
-
-  // Warn if MT requested but not available
-  if (!isMultiThreadedModule && opts.maxThreads && opts.maxThreads > 1) {
-    console.warn(
-      "[jcodecs-avif] maxThreads > 1 requested but SharedArrayBuffer is not available. Using single-threaded decoding.",
-    );
-  }
-
   const module = decoderModule!;
-  const maxThreads = isMultiThreadedModule ? (opts.maxThreads ?? 0) : 1;
+
+  // Validate maxThreads
+  if (!isMultiThreadedModule) {
+    if (opts.maxThreads > 1) {
+      console.warn("[jcodecs-avif] maxThreads > 1 ignored: SharedArrayBuffer not available");
+    }
+    opts.maxThreads = 1;
+  } else if (opts.maxThreads > maxThreads) {
+    console.warn(`[jcodecs-avif] maxThreads=${opts.maxThreads} exceeds limit ${maxThreads}, clamping`);
+    opts.maxThreads = maxThreads;
+  }
 
   // Copy input data to WASM heap
   const t1 = profilingEnabled ? performance.now() : 0;
@@ -195,7 +201,7 @@ export async function decode(
 
   let result;
   try {
-    result = module.decode(inputPtr, data.length, opts.bitDepth, maxThreads);
+    result = module.decode(inputPtr, data.length, opts.bitDepth, opts.maxThreads);
   } finally {
     module._free(inputPtr);
   }

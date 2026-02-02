@@ -9,6 +9,11 @@
 
 using namespace emscripten;
 
+// Max threads constant (defined via CMake for MT builds)
+#ifndef MAX_THREADS
+#define MAX_THREADS 1  // Single-threaded fallback
+#endif
+
 // ============================================================================
 // CICP to string conversion functions
 // ============================================================================
@@ -500,4 +505,7 @@ EMSCRIPTEN_BINDINGS(avif_decoder)
 
     function("decode", &decode);
     function("getImageInfo", &getImageInfo);
+
+    // Export max threads constant
+    constant("MAX_THREADS", MAX_THREADS);
 }

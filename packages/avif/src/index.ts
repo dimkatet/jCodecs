@@ -1,10 +1,12 @@
 // Main exports
 export {
   encode,
+  encodeSimple,
   init as initEncoder,
   isInitialized as isEncoderInitialized,
-  isMultiThreaded as isEncoderMultiThreaded,
 } from './encode';
+
+export type { InitConfig as EncoderInitConfig } from './encode';
 
 export {
   decode,
@@ -25,6 +27,7 @@ export type {
   ChromaSubsampling,
   ColorSpace,
   EncoderTune,
+  TransferFunctionOption,
 } from './options';
 
 export { DEFAULT_ENCODE_OPTIONS, DEFAULT_DECODE_OPTIONS } from './options';
@@ -44,7 +47,7 @@ export { DEFAULT_SRGB_METADATA } from './types';
 
 // Worker API
 export {
-  initWorkerPool,
+  createWorkerPool,
   encodeInWorker,
   decodeInWorker,
   getWorkerPoolStats,
@@ -52,7 +55,7 @@ export {
   isWorkerPoolInitialized,
 } from './worker-api';
 
-export type { WorkerPoolConfig } from './worker-api';
+export type { WorkerPoolConfig, AVIFWorkerClient } from './worker-api';
 
 // Re-export generic types from core
 export type { ExtendedImageData, ImageInfo } from '@dimkatet/jcodecs-core';

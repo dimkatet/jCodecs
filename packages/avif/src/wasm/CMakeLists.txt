@@ -8,8 +8,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(BUILD_ENCODER "Build encoder (requires aom)" OFF)
 option(BUILD_MT "Build multi-threaded versions" OFF)
 
+# Max threads for multi-threaded builds (must match PTHREAD_POOL_SIZE)
+set(MAX_THREADS 8 CACHE STRING "Maximum number of threads for MT builds")
+
 # Paths to pre-built native libraries (set by build script)
-set(LIBAVIF_LIB "" CACHE PATH "Path to libavif.a")
+set(LIBAVIF_DEC_LIB "" CACHE PATH "Path to libavif.a (decoder, built with dav1d)")
+set(LIBAVIF_ENC_LIB "" CACHE PATH "Path to libavif.a (encoder, built with aom)")
 set(DAV1D_LIB "" CACHE PATH "Path to libdav1d.a")
 set(AOM_LIB "" CACHE PATH "Path to libaom.a")
 set(LIBYUV_LIB "" CACHE PATH "Path to libyuv.a (optional)")
@@ -42,7 +46,7 @@ set(COMMON_LINK_FLAGS
 set(MT_FLAGS
     "-pthread"
     "-s USE_PTHREADS=1"
-    "-s PTHREAD_POOL_SIZE=\"Math.min(navigator.hardwareConcurrency || 4, 8)\""
+    "-s PTHREAD_POOL_SIZE=${MAX_THREADS}"
 )
 
 string(REPLACE ";" " " COMMON_LINK_FLAGS_STR "${COMMON_LINK_FLAGS}")
@@ -63,11 +67,11 @@ target_include_directories(avif_dec PRIVATE
 )
 target_compile_options(avif_dec PRIVATE -O3 -flto -msimd128)
 set_target_properties(avif_dec PROPERTIES
-    LINK_FLAGS "${COMMON_LINK_FLAGS_STR} -s EXPORT_NAME='createAVIFDecoder'"
+    LINK_FLAGS "${COMMON_LINK_FLAGS_STR} -s EXPORT_NAME='createAVIFDecoder' --emit-tsd avif_dec.d.ts"
     SUFFIX ".js"
 )
 target_link_libraries(avif_dec
-    ${LIBAVIF_LIB}
+    ${LIBAVIF_DEC_LIB}
     ${DAV1D_LIB}
 )
 add_optional_libyuv(avif_dec)
@@ -80,36 +84,36 @@ if(BUILD_MT)
         ${DAV1D_INCLUDE}
     )
     target_compile_options(avif_dec_mt PRIVATE -O3 -flto -pthread)
+    target_compile_definitions(avif_dec_mt PRIVATE MAX_THREADS=${MAX_THREADS})
     set_target_properties(avif_dec_mt PROPERTIES
-        LINK_FLAGS "${COMMON_LINK_FLAGS_STR} ${MT_FLAGS_STR} -s EXPORT_NAME='createAVIFDecoderMT'"
+        LINK_FLAGS "${COMMON_LINK_FLAGS_STR} ${MT_FLAGS_STR} -s EXPORT_NAME='createAVIFDecoderMT' --emit-tsd avif_dec_mt.d.ts"
         SUFFIX ".js"
     )
     target_link_libraries(avif_dec_mt
-        ${LIBAVIF_LIB}
+        ${LIBAVIF_DEC_LIB}
         ${DAV1D_LIB}
     )
     add_optional_libyuv(avif_dec_mt)
 endif()
 
-# --- Encoder (single-threaded) ---
+# --- Encoder (single-threaded only for now) ---
 if(BUILD_ENCODER)
     add_executable(avif_enc avif_enc.cpp)
     target_include_directories(avif_enc PRIVATE
         ${LIBAVIF_INCLUDE}
         ${AOM_INCLUDE}
     )
-    target_compile_options(avif_enc PRIVATE -O3 -flto)
+    target_compile_options(avif_enc PRIVATE -O3 -flto -msimd128)
     set_target_properties(avif_enc PROPERTIES
-        LINK_FLAGS "${COMMON_LINK_FLAGS_STR} -s EXPORT_NAME='createAVIFEncoder'"
+        LINK_FLAGS "${COMMON_LINK_FLAGS_STR} -s EXPORT_NAME='createAVIFEncoder' --emit-tsd avif_enc.d.ts"
         SUFFIX ".js"
     )
     target_link_libraries(avif_enc
-        ${LIBAVIF_LIB}
+        ${LIBAVIF_ENC_LIB}
         ${AOM_LIB}
     )
     add_optional_libyuv(avif_enc)
 
-    # --- Encoder (multi-threaded) ---
     if(BUILD_MT)
         add_executable(avif_enc_mt avif_enc.cpp)
         target_include_directories(avif_enc_mt PRIVATE
@@ -117,12 +121,13 @@ if(BUILD_ENCODER)
             ${AOM_INCLUDE}
         )
         target_compile_options(avif_enc_mt PRIVATE -O3 -flto -pthread)
+        target_compile_definitions(avif_enc_mt PRIVATE MAX_THREADS=${MAX_THREADS})
         set_target_properties(avif_enc_mt PROPERTIES
-            LINK_FLAGS "${COMMON_LINK_FLAGS_STR} ${MT_FLAGS_STR} -s EXPORT_NAME='createAVIFEncoderMT'"
+            LINK_FLAGS "${COMMON_LINK_FLAGS_STR} ${MT_FLAGS_STR} -s EXPORT_NAME='createAVIFEncoderMT' -s STACK_SIZE=131072 --emit-tsd avif_enc_mt.d.ts"
             SUFFIX ".js"
         )
         target_link_libraries(avif_enc_mt
-            ${LIBAVIF_LIB}
+            ${LIBAVIF_ENC_LIB}
             ${AOM_LIB}
         )
         add_optional_libyuv(avif_enc_mt)

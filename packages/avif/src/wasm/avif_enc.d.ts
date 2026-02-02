@@ -22,66 +22,35 @@ interface WasmModule {
 }
 
 type EmbindString = ArrayBuffer|Uint8Array|Uint8ClampedArray|Int8Array|string;
-export type MasteringDisplay = {
-  redX: number,
-  redY: number,
-  greenX: number,
-  greenY: number,
-  blueX: number,
-  blueY: number,
-  whiteX: number,
-  whiteY: number,
-  minLuminance: number,
-  maxLuminance: number,
-  present: boolean
-};
-
-export type DecodeTimings = {
-  io: number,
-  parse: number,
-  decode: number,
-  yuvToRgb: number,
-  memcpy: number,
+export type EncodeTimings = {
+  rgbToYuv: number,
+  encode: number,
   total: number
 };
 
-export type ImageMetadata = {
-  colorPrimaries: EmbindString,
+export type EncodeOptions = {
+  quality: number,
+  qualityAlpha: number,
+  speed: number,
+  tune: EmbindString,
+  lossless: boolean,
+  chromaSubsampling: number,
+  bitDepth: number,
+  colorSpace: EmbindString,
   transferFunction: EmbindString,
-  matrixCoefficients: EmbindString,
-  fullRange: boolean,
-  maxCLL: number,
-  maxPALL: number,
-  masteringDisplay: MasteringDisplay,
-  iccProfilePtr: number,
-  iccProfileSize: number,
-  isHDR: boolean
+  maxThreads: number
 };
 
-export type ImageInfo = {
-  width: number,
-  height: number,
-  depth: number,
-  channels: number,
-  metadata: ImageMetadata
-};
-
-export type DecodeResult = {
+export type EncodeResult = {
   dataPtr: number,
   dataSize: number,
-  width: number,
-  height: number,
-  depth: number,
-  channels: number,
-  metadata: ImageMetadata,
-  timings: DecodeTimings,
-  error: EmbindString
+  error: EmbindString,
+  timings: EncodeTimings
 };
 
 interface EmbindModule {
   MAX_THREADS: number;
-  getImageInfo(_0: number, _1: number): ImageInfo;
-  decode(_0: number, _1: number, _2: number, _3: number): DecodeResult;
+  encode(_0: number, _1: number, _2: number, _3: number, _4: number, _5: number, _6: EncodeOptions): EncodeResult;
 }
 
 export type MainModule = WasmModule & typeof RuntimeExports & EmbindModule;
