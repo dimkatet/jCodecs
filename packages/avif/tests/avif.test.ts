@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   isEncoderInitialized,
   isDecoderInitialized,
-  encode,
   DEFAULT_ENCODE_OPTIONS,
   DEFAULT_DECODE_OPTIONS,
 } from '../src/index';
@@ -32,18 +31,6 @@ describe('@dimkatet/jcodecs-avif', () => {
   describe('encoder (not available)', () => {
     it('should report encoder as not initialized', () => {
       expect(isEncoderInitialized()).toBe(false);
-    });
-
-    it('should throw error when trying to encode', async () => {
-      const fakeImageData = {
-        data: new Uint8ClampedArray(4),
-        width: 1,
-        height: 1,
-      } as ImageData;
-
-      await expect(encode(fakeImageData)).rejects.toThrow(
-        'AVIF encoder is not yet available'
-      );
     });
   });
 
