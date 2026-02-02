@@ -1,5 +1,19 @@
 # @dimkatet/jcodecs-avif
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @dimkatet/jcodecs-core@0.4.0
+
+- Migrate to shared utilities from @jcodecs/core
+
+  - Use `isMultiThreadSupported`, `validateThreadCount`, `copyToWasm` from core
+  - Remove duplicated utility functions
+  - Re-export `isMultiThreadSupported` for backward compatibility
+
+
 ## 0.4.0
 
 ### Minor Changes

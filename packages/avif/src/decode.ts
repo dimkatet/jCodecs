@@ -1,3 +1,8 @@
+import {
+  isMultiThreadSupported,
+  validateThreadCount,
+  copyToWasm,
+} from "@dimkatet/jcodecs-core";
 import type { AVIFDecodeOptions } from "./options";
 import { DEFAULT_DECODE_OPTIONS } from "./options";
 import type {
@@ -14,6 +19,7 @@ import type {
   ImageMetadata,
   MasteringDisplay as WASMMasteringDisplay,
 } from "./wasm/avif_dec";
+
 
 type WasmModule = typeof import("./wasm/avif_dec_mt");
 
@@ -60,16 +66,6 @@ function logProfile(profile: DecodeProfile): void {
   );
 }
 
-/**
- * Check if SharedArrayBuffer is available (required for multi-threaded decoding)
- */
-export function isMultiThreadSupported(): boolean {
-  try {
-    return typeof SharedArrayBuffer !== "undefined";
-  } catch {
-    return false;
-  }
-}
 
 // Default URLs - auto-detect MT support (WASM is embedded via SINGLE_FILE)
 const defaultMtJsUrl = new URL("./avif_dec_mt.js", import.meta.url).href;
@@ -113,14 +109,6 @@ export async function init({ jsUrl, preferMT }: InitConfig = {}): Promise<void> 
   await initPromise;
 }
 
-/**
- * Copy data to WASM heap and return pointer
- */
-function copyToWasm(module: MainModule, data: Uint8Array): number {
-  const ptr = module._malloc(data.length);
-  module.HEAPU8.set(data, ptr);
-  return ptr;
-}
 
 function convertMasteringDisplay(
   wasm: WASMMasteringDisplay,
@@ -184,15 +172,16 @@ export async function decode(
   const module = decoderModule!;
 
   // Validate maxThreads
-  if (!isMultiThreadedModule) {
-    if (opts.maxThreads > 1) {
-      console.warn("[jcodecs-avif] maxThreads > 1 ignored: SharedArrayBuffer not available");
-    }
-    opts.maxThreads = 1;
-  } else if (opts.maxThreads > maxThreads) {
-    console.warn(`[jcodecs-avif] maxThreads=${opts.maxThreads} exceeds limit ${maxThreads}, clamping`);
-    opts.maxThreads = maxThreads;
+  const validation = validateThreadCount(
+    opts.maxThreads,
+    maxThreads,
+    isMultiThreadedModule,
+    "jcodecs-avif",
+  );
+  if (validation.warning) {
+    console.warn(validation.warning);
   }
+  opts.maxThreads = validation.validatedCount;
 
   // Copy input data to WASM heap
   const t1 = profilingEnabled ? performance.now() : 0;

@@ -1,4 +1,9 @@
 import type { ExtendedImageData } from "@dimkatet/jcodecs-core";
+import {
+  isMultiThreadSupported,
+  validateThreadCount,
+  copyToWasm,
+} from "@dimkatet/jcodecs-core";
 import type { AVIFEncodeOptions, ChromaSubsampling } from "./options";
 import { DEFAULT_ENCODE_OPTIONS } from "./options";
 import type { MainModule, EncodeOptions } from "./wasm/avif_enc";
@@ -86,28 +91,6 @@ export async function init({ jsUrl, preferMT }: InitConfig = {}): Promise<void> 
   await initPromise;
 }
 
-/**
- * Copy data to WASM heap and return pointer
- */
-function copyToWasm(
-  module: MainModule,
-  data: Uint8Array | Uint16Array,
-): number {
-  const byteLength =
-    data instanceof Uint16Array ? data.byteLength : data.length;
-  const ptr = module._malloc(byteLength);
-
-  if (data instanceof Uint16Array) {
-    module.HEAPU8.set(
-      new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
-      ptr,
-    );
-  } else {
-    module.HEAPU8.set(data, ptr);
-  }
-
-  return ptr;
-}
 
 /**
  * Convert chroma subsampling string to number
@@ -142,15 +125,16 @@ export async function encode(
   const module = encoderModule!;
 
   // Validate maxThreads
-  if (!isMultiThreadedModule) {
-    if (opts.maxThreads > 1) {
-      console.warn("[jcodecs-avif] maxThreads > 1 ignored: SharedArrayBuffer not available");
-    }
-    opts.maxThreads = 1;
-  } else if (opts.maxThreads > maxThreads) {
-    console.warn(`[jcodecs-avif] maxThreads=${opts.maxThreads} exceeds limit ${maxThreads}, clamping`);
-    opts.maxThreads = maxThreads;
+  const validation = validateThreadCount(
+    opts.maxThreads,
+    maxThreads,
+    isMultiThreadedModule,
+    "jcodecs-avif",
+  );
+  if (validation.warning) {
+    console.warn(validation.warning);
   }
+  opts.maxThreads = validation.validatedCount;
 
   // Determine input format
   const width = imageData.width;
@@ -249,16 +233,6 @@ export async function encode(
   return output;
 }
 
-/**
- * Check if SharedArrayBuffer is available (required for multi-threaded decoding)
- */
-export function isMultiThreadSupported(): boolean {
-  try {
-    return typeof SharedArrayBuffer !== "undefined";
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Encode ImageData to AVIF with simple options

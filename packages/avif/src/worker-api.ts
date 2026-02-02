@@ -2,7 +2,7 @@
  * Worker API for AVIF encoding/decoding
  */
 import { CodecWorkerClient } from "@dimkatet/jcodecs-core/codec-worker-client";
-import { isMultiThreadSupported } from "./decode";
+import { isMultiThreadSupported } from "@dimkatet/jcodecs-core";
 import type { AVIFEncodeOptions, AVIFDecodeOptions } from "./options";
 import type { AVIFImageData } from "./types";
 import type { AVIFWorkerHandlers, WorkerInitPayload } from "./worker";

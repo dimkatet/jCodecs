@@ -8,6 +8,8 @@ export default defineConfig({
     'worker-pool': 'src/worker-pool.ts',
     'codec-worker': 'src/codec-worker.ts',
     'codec-worker-client': 'src/codec-worker-client.ts',
+    threading: 'src/threading.ts',
+    'wasm-utils': 'src/wasm-utils.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

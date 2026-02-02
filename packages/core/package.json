@@ -1,6 +1,6 @@
 {
   "name": "@dimkatet/jcodecs-core",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Core utilities and types for jCodecs",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -36,6 +36,16 @@
       "types": "./dist/codec-worker-client.d.ts",
       "import": "./dist/codec-worker-client.js",
       "require": "./dist/codec-worker-client.cjs"
+    },
+    "./threading": {
+      "types": "./dist/threading.d.ts",
+      "import": "./dist/threading.js",
+      "require": "./dist/threading.cjs"
+    },
+    "./wasm-utils": {
+      "types": "./dist/wasm-utils.d.ts",
+      "import": "./dist/wasm-utils.js",
+      "require": "./dist/wasm-utils.cjs"
     }
   },
   "files": [

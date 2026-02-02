@@ -15,7 +15,6 @@ export {
   init as initDecoder,
   isInitialized as isDecoderInitialized,
   isMultiThreaded as isDecoderMultiThreaded,
-  isMultiThreadSupported,
 } from './decode';
 
 export type { InitConfig as DecoderInitConfig } from './decode';
@@ -57,5 +56,6 @@ export {
 
 export type { WorkerPoolConfig, AVIFWorkerClient } from './worker-api';
 
-// Re-export generic types from core
+// Re-export from core
+export { isMultiThreadSupported } from '@dimkatet/jcodecs-core';
 export type { ExtendedImageData, ImageInfo } from '@dimkatet/jcodecs-core';
