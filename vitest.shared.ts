@@ -1,25 +1,20 @@
-import { defineConfig } from "vitest/config";
+import { ViteUserConfig } from "vitest/config";
 import { playwright } from '@vitest/browser-playwright'
 import { resolve } from "path";
 
-export default defineConfig({
-  // Serve fixtures as static files
-  publicDir: resolve(__dirname, "packages/avif/tests/fixtures"),
+export const baseConfig = {
 
   resolve: {
     alias: {
-      // Subpath exports must come before main export
       "@dimkatet/jcodecs-core/codec-worker": resolve(__dirname, "packages/core/src/codec-worker.ts"),
       "@dimkatet/jcodecs-core/codec-worker-client": resolve(__dirname, "packages/core/src/codec-worker-client.ts"),
-      "@dimkatet/jcodecs-core": resolve(__dirname, "./packages/core/dist/index.js"),
-      "@dimkatet/jcodecs-avif": resolve(__dirname, "./packages/avif/dist/index.js"),
     },
   },
 
   test: {
     // Browser tests only
     environment: "node",
-    include: ["packages/*/tests/browser/**/*.test.ts"],
+    include: ["**/*.test.ts"],
     watch: false,
 
     // Browser mode
@@ -27,7 +22,6 @@ export default defineConfig({
       enabled: true,
       headless: true,
       provider: playwright(),
-      instances: [{ browser: "chromium" }],
     },
 
     // Test settings
@@ -35,9 +29,6 @@ export default defineConfig({
     hookTimeout: 60000,
   },
   server: {
-    // fs: {
-    //   allow: [".."],
-    // },
 
     headers: {
       "Cross-Origin-Embedder-Policy": "require-corp",
@@ -45,4 +36,4 @@ export default defineConfig({
       "Cross-Origin-Resource-Policy": "cross-origin",
     },
   },
-});
+} satisfies ViteUserConfig;

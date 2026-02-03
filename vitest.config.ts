@@ -1,27 +1,61 @@
-import { defineConfig } from 'vitest/config';
+// vitest.config.ts
+import { defineConfig, defineProject, mergeConfig } from "vitest/config";
+import { resolve } from "path";
+import { baseConfig } from "./vitest.shared";
 
 export default defineConfig({
   test: {
-    // Node.js tests (browser tests run via vitest.browser.config.ts)
-    include: ['tests/**/*.test.ts', 'packages/*/tests/**/*.test.ts'],
-    exclude: ['**/tests/browser/**'],
+    projects: [
+      defineProject({
+        test: {
+          name: "core",
+          root: "./packages/core",
+        },
+      }),
 
-    // Test settings
-    testTimeout: 30000,
-    hookTimeout: 30000,
+      mergeConfig(
+        baseConfig,
+        defineProject({
+          publicDir: resolve(__dirname, "packages/jxl/tests/fixtures"),
+          test: {
+            name: "jxl",
+            root: "./packages/jxl",
+            browser: {
+              instances: [{ browser: "chromium", name: "jxl-chromium" }],
+            },
+          },
+          resolve: {
+            alias: {
+              "@dimkatet/jcodecs-jxl": resolve(
+                __dirname,
+                "./packages/jxl/dist/index.js",
+              ),
+            },
+          },
+        }),
+      ),
 
-    // Coverage
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html'],
-      include: ['packages/*/src/**/*.ts'],
-      exclude: ['**/*.d.ts', '**/worker.ts'],
-    },
-  },
-  server: {
-    headers: {
-      'Cross-Origin-Embedder-Policy': 'require-corp',
-      'Cross-Origin-Opener-Policy': 'same-origin',
-    },
+      mergeConfig(
+        baseConfig,
+        defineProject({
+          publicDir: resolve(__dirname, "packages/avif/tests/fixtures"),
+          test: {
+            name: "avif",
+            root: "./packages/avif",
+            browser: {
+              instances: [{ browser: "chromium", name: "avif-chromium" }],
+            },
+          },
+          resolve: {
+            alias: {
+              "@dimkatet/jcodecs-avif": resolve(
+                __dirname,
+                "./packages/avif/dist/index.js",
+              ),
+            },
+          },
+        }),
+      ),
+    ],
   },
 });

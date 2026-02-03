@@ -23,12 +23,6 @@
       "cache": false,
       "persistent": true
     },
-    "test": {
-      "cache": false
-    },
-    "test:browser": {
-      "cache": false
-    },
     "typecheck": {
       "dependsOn": ["^build:ts"]
     },

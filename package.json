@@ -11,8 +11,7 @@
     "build:avif": "pnpm --filter @dimkatet/jcodecs-avif build",
     "dev": "turbo dev --filter @examples/*",
     "dev:example": "turbo dev --filter @examples/*",
-    "test": "turbo test",
-    "test:browser": "turbo build:ts && vitest --config vitest.browser.config.ts --no-watch",
+    "test": "turbo build:ts && vitest --no-watch",
     "typecheck": "turbo typecheck",
     "clean": "turbo clean && rm -rf node_modules",
     "clean:wasm": "rm -rf packages/*/wasm/*.wasm packages/*/wasm/*.js",
@@ -26,7 +25,7 @@
     "@vitest/browser-playwright": "^4.0.18",
     "playwright": "^1.58.0",
     "turbo": "^2.0.0",
-    "typescript": "^5.4.0",
+    "typescript": "^5.9.3",
     "vite": "^7.3.1",
     "vitest": "^4.0.18"
   },
