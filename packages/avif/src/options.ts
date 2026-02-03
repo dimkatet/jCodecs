@@ -115,9 +115,14 @@ export interface AVIFEncodeOptions {
  */
 export interface AVIFDecodeOptions {
   /**
-   * Target bit depth for output.
+   * Target bit depth for output (real data precision).
    * - 0: Auto (use source bit depth)
    * - 8, 10, 12, 16: Convert to specified depth
+   *
+   * Note: bitDepth and dataType work together:
+   * - dataType determines TypedArray type
+   * - bitDepth determines actual data range
+   *
    * @default 0
    */
   bitDepth?: 0 | 8 | 10 | 12 | 16;

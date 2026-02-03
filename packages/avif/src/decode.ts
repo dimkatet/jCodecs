@@ -2,23 +2,21 @@ import {
   isMultiThreadSupported,
   validateThreadCount,
   copyToWasm,
+  copyFromWasmByType,
 } from "@dimkatet/jcodecs-core";
 import type { AVIFDecodeOptions } from "./options";
 import { DEFAULT_DECODE_OPTIONS } from "./options";
 import type {
   AVIFImageData,
   AVIFImageInfo,
-  AVIFMetadata,
-  MasteringDisplay,
-  ColorPrimaries,
-  TransferFunction,
-  MatrixCoefficients,
+  AVIFDataType,
 } from "./types";
-import type {
-  MainModule,
-  ImageMetadata,
-  MasteringDisplay as WASMMasteringDisplay,
-} from "./wasm/avif_dec";
+import type { MainModule } from "./wasm/avif_dec";
+import {
+  isProfilingEnabled,
+  logDecodeProfile,
+} from "./profiling";
+import { convertMetadata } from "./metadata";
 
 
 type WasmModule = typeof import("./wasm/avif_dec_mt");
@@ -27,45 +25,6 @@ let decoderModule: MainModule | null = null;
 let isMultiThreadedModule = false;
 let maxThreads = 1;
 let initPromise: Promise<void> | null = null;
-
-// Profiling
-let profilingEnabled = false;
-
-export interface DecodeProfile {
-  inputSize: number;
-  outputSize: number;
-  dimensions: string;
-  bitDepth: number;
-  copyToWasm: number;
-  wasmDecode: number;
-  copyFromWasm: number;
-  convertMetadata: number;
-  total: number;
-}
-
-export function enableProfiling(enabled = true): void {
-  profilingEnabled = enabled;
-}
-
-function logProfile(profile: DecodeProfile): void {
-  if (!profilingEnabled) return;
-
-  console.log(
-    `[AVIF Decode Profile] ${profile.dimensions} @ ${profile.bitDepth}bit\n` +
-      `  Input:          ${(profile.inputSize / 1024).toFixed(1)} KB\n` +
-      `  Output:         ${(profile.outputSize / 1024 / 1024).toFixed(
-        2,
-      )} MB\n` +
-      `  ─────────────────────────────\n` +
-      `  Copy to WASM:   ${profile.copyToWasm.toFixed(2)} ms\n` +
-      `  WASM decode:    ${profile.wasmDecode.toFixed(2)} ms\n` +
-      `  Copy from WASM: ${profile.copyFromWasm.toFixed(2)} ms\n` +
-      `  Convert meta:   ${profile.convertMetadata.toFixed(2)} ms\n` +
-      `  ─────────────────────────────\n` +
-      `  TOTAL:          ${profile.total.toFixed(2)} ms`,
-  );
-}
-
 
 // Default URLs - auto-detect MT support (WASM is embedded via SINGLE_FILE)
 const defaultMtJsUrl = new URL("./avif_dec_mt.js", import.meta.url).href;
@@ -109,53 +68,6 @@ export async function init({ jsUrl, preferMT }: InitConfig = {}): Promise<void> 
   await initPromise;
 }
 
-
-function convertMasteringDisplay(
-  wasm: WASMMasteringDisplay,
-): MasteringDisplay | undefined {
-  if (!wasm.present) return undefined;
-
-  return {
-    primaries: {
-      red: [wasm.redX, wasm.redY],
-      green: [wasm.greenX, wasm.greenY],
-      blue: [wasm.blueX, wasm.blueY],
-    },
-    whitePoint: [wasm.whiteX, wasm.whiteY],
-    luminance: {
-      min: wasm.minLuminance,
-      max: wasm.maxLuminance,
-    },
-  };
-}
-
-function convertMetadata(
-  wasm: ImageMetadata,
-  module: MainModule,
-): AVIFMetadata {
-  // Copy ICC profile from WASM heap in one bulk operation
-  let iccProfile: Uint8Array | undefined;
-  if (wasm.iccProfileSize > 0 && wasm.iccProfilePtr !== 0) {
-    iccProfile = module.HEAPU8.slice(
-      wasm.iccProfilePtr,
-      wasm.iccProfilePtr + wasm.iccProfileSize,
-    );
-    module._free(wasm.iccProfilePtr);
-  }
-
-  return {
-    colorPrimaries: wasm.colorPrimaries as ColorPrimaries,
-    transferFunction: wasm.transferFunction as TransferFunction,
-    matrixCoefficients: wasm.matrixCoefficients as MatrixCoefficients,
-    fullRange: wasm.fullRange,
-    maxCLL: wasm.maxCLL,
-    maxPALL: wasm.maxPALL,
-    masteringDisplay: convertMasteringDisplay(wasm.masteringDisplay),
-    iccProfile,
-    isHDR: wasm.isHDR,
-  };
-}
-
 /**
  * Decode AVIF image data
  */
@@ -165,7 +77,7 @@ export async function decode(
   config?: InitConfig,
 ): Promise<AVIFImageData> {
   await init(config);
-  const t0 = profilingEnabled ? performance.now() : 0;
+  const t0 = isProfilingEnabled() ? performance.now() : 0;
 
   const data = input instanceof ArrayBuffer ? new Uint8Array(input) : input;
   const opts = { ...DEFAULT_DECODE_OPTIONS, ...options };
@@ -184,9 +96,9 @@ export async function decode(
   opts.maxThreads = validation.validatedCount;
 
   // Copy input data to WASM heap
-  const t1 = profilingEnabled ? performance.now() : 0;
+  const t1 = isProfilingEnabled() ? performance.now() : 0;
   const inputPtr = copyToWasm(module, data);
-  const t2 = profilingEnabled ? performance.now() : 0;
+  const t2 = isProfilingEnabled() ? performance.now() : 0;
 
   let result;
   try {
@@ -194,38 +106,32 @@ export async function decode(
   } finally {
     module._free(inputPtr);
   }
-  const t3 = profilingEnabled ? performance.now() : 0;
+  const t3 = isProfilingEnabled() ? performance.now() : 0;
 
   if (result.error) {
     throw new Error(`AVIF decode error: ${result.error}`);
   }
 
-  const outputDepth = result.depth as 8 | 10 | 12 | 16;
-  let pixelData: Uint8Array | Uint16Array;
-  // Copy pixel data from WASM heap in one operation
+  const outputDepth = result.depth;
+  let outputDataType: AVIFDataType = 'uint8';
+  let bytesPerElement = 1;
   if (outputDepth > 8) {
-    pixelData = new Uint16Array(result.dataSize / 2);
-    pixelData.set(
-      new Uint16Array(
-        module.HEAPU16.buffer,
-        result.dataPtr,
-        result.dataSize / 2,
-      ),
-    );
-  } else {
-    pixelData = new Uint8Array(result.dataSize);
-    pixelData.set(
-      new Uint8Array(module.HEAPU8.buffer, result.dataPtr, result.dataSize),
-    );
+    // Auto: use uint16 for >8 bit
+    outputDataType = "uint16";
+    bytesPerElement = 2;
   }
+
+  const elementCount = result.dataSize / bytesPerElement;
+  const pixelData = copyFromWasmByType(module, result.dataPtr, elementCount, outputDataType);
+
   module._free(result.dataPtr);
-  const t4 = profilingEnabled ? performance.now() : 0;
+  const t4 = isProfilingEnabled() ? performance.now() : 0;
 
   const metadata = convertMetadata(result.metadata, module);
-  const t5 = profilingEnabled ? performance.now() : 0;
+  const t5 = isProfilingEnabled() ? performance.now() : 0;
 
-  if (profilingEnabled) {
-    logProfile({
+  if (isProfilingEnabled()) {
+    logDecodeProfile({
       inputSize: data.length,
       outputSize: result.dataSize,
       dimensions: `${result.width}x${result.height}`,
@@ -240,6 +146,7 @@ export async function decode(
 
   return {
     data: pixelData,
+    dataType: outputDataType,
     width: result.width,
     height: result.height,
     bitDepth: outputDepth,

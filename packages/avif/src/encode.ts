@@ -1,12 +1,16 @@
-import type { ExtendedImageData } from "@dimkatet/jcodecs-core";
 import {
+  copyToWasm,
+  getExtendedImageData,
   isMultiThreadSupported,
   validateThreadCount,
-  copyToWasm,
 } from "@dimkatet/jcodecs-core";
+import { defaultMetadata } from "./metadata";
 import type { AVIFEncodeOptions, ChromaSubsampling } from "./options";
 import { DEFAULT_ENCODE_OPTIONS } from "./options";
-import type { MainModule, EncodeOptions } from "./wasm/avif_enc";
+import { isProfilingEnabled, logEncodeProfile } from "./profiling";
+import type { AVIFEncodeInput } from "./types";
+import { validateDataType, validateDataTypeMatch } from "./validation";
+import type { EncodeOptions, MainModule } from "./wasm/avif_enc";
 
 type WasmModule = typeof import("./wasm/avif_enc_mt");
 
@@ -14,41 +18,6 @@ let encoderModule: MainModule | null = null;
 let isMultiThreadedModule = false;
 let maxThreads = 1;
 let initPromise: Promise<void> | null = null;
-
-// Profiling
-let profilingEnabled = false;
-
-export interface EncodeProfile {
-  inputSize: number;
-  outputSize: number;
-  dimensions: string;
-  inputBitDepth: number;
-  outputBitDepth: number;
-  copyToWasm: number;
-  wasmEncode: number;
-  copyFromWasm: number;
-  total: number;
-}
-
-export function enableProfiling(enabled = true): void {
-  profilingEnabled = enabled;
-}
-
-function logProfile(profile: EncodeProfile): void {
-  if (!profilingEnabled) return;
-
-  console.log(
-    `[AVIF Encode Profile] ${profile.dimensions} @ ${profile.inputBitDepth}bit → ${profile.outputBitDepth}bit\n` +
-      `  Input:          ${(profile.inputSize / 1024 / 1024).toFixed(2)} MB\n` +
-      `  Output:         ${(profile.outputSize / 1024).toFixed(1)} KB\n` +
-      `  ─────────────────────────────\n` +
-      `  Copy to WASM:   ${profile.copyToWasm.toFixed(2)} ms\n` +
-      `  WASM encode:    ${profile.wasmEncode.toFixed(2)} ms\n` +
-      `  Copy from WASM: ${profile.copyFromWasm.toFixed(2)} ms\n` +
-      `  ─────────────────────────────\n` +
-      `  TOTAL:          ${profile.total.toFixed(2)} ms`,
-  );
-}
 
 // Default URL (WASM is embedded via SINGLE_FILE)
 const defaultMtJsUrl = new URL("./avif_enc_mt.js", import.meta.url).href;
@@ -64,7 +33,10 @@ export interface InitConfig {
 /**
  * Initialize the AVIF encoder module.
  */
-export async function init({ jsUrl, preferMT }: InitConfig = {}): Promise<void> {
+export async function init({
+  jsUrl,
+  preferMT,
+}: InitConfig = {}): Promise<void> {
   if (encoderModule) return;
 
   if (initPromise) {
@@ -72,7 +44,6 @@ export async function init({ jsUrl, preferMT }: InitConfig = {}): Promise<void> 
     return;
   }
 
-  
   const useMT = preferMT && isMultiThreadSupported();
   const url = jsUrl ?? (useMT ? defaultMtJsUrl : defaultStJsUrl);
 
@@ -90,7 +61,6 @@ export async function init({ jsUrl, preferMT }: InitConfig = {}): Promise<void> 
 
   await initPromise;
 }
-
 
 /**
  * Convert chroma subsampling string to number
@@ -114,13 +84,17 @@ function chromaToNumber(chroma: ChromaSubsampling): number {
  * Encode image data to AVIF format
  */
 export async function encode(
-  imageData: ImageData | ExtendedImageData,
+  encodeInput: AVIFEncodeInput,
   options: AVIFEncodeOptions = {},
   config?: InitConfig,
 ): Promise<Uint8Array> {
   await init(config);
-  const t0 = profilingEnabled ? performance.now() : 0;
-  
+  const t0 = isProfilingEnabled() ? performance.now() : 0;
+  const imageData =
+    encodeInput instanceof ImageData
+      ? getExtendedImageData(encodeInput, defaultMetadata)
+      : encodeInput;
+
   const opts = { ...DEFAULT_ENCODE_OPTIONS, ...options };
   const module = encoderModule!;
 
@@ -136,38 +110,14 @@ export async function encode(
   }
   opts.maxThreads = validation.validatedCount;
 
-  // Determine input format
-  const width = imageData.width;
-  const height = imageData.height;
-
-  // Check if it's ExtendedImageData with bitDepth
-  const isExtended = "bitDepth" in imageData;
-  const inputBitDepth = isExtended
-    ? (imageData as ExtendedImageData).bitDepth
-    : 8;
-  const channels =
-    isExtended && "channels" in imageData
-      ? (imageData as ExtendedImageData).channels
-      : 4; // Standard ImageData is always RGBA
-
-  // Get pixel data
-  let pixelData: Uint8Array | Uint16Array;
-  if (isExtended && inputBitDepth > 8) {
-    pixelData = (imageData as ExtendedImageData).data as Uint16Array;
-  } else {
-    pixelData = new Uint8Array(
-      imageData.data.buffer,
-      imageData.data.byteOffset,
-      imageData.data.byteLength,
-    );
-  }
+  validateDataType(imageData.dataType);
+  validateDataTypeMatch(imageData);
 
   // Copy input data to WASM heap
-  const t1 = profilingEnabled ? performance.now() : 0;
-  const inputPtr = copyToWasm(module, pixelData);
-  const inputSize =
-    pixelData instanceof Uint16Array ? pixelData.byteLength : pixelData.length;
-  const t2 = profilingEnabled ? performance.now() : 0;
+  const t1 = isProfilingEnabled() ? performance.now() : 0;
+  const inputPtr = copyToWasm(module, imageData.data);
+  const inputSize = imageData.data.byteLength;
+  const t2 = isProfilingEnabled() ? performance.now() : 0;
 
   // Prepare WASM options
   const wasmOptions: EncodeOptions = {
@@ -187,17 +137,17 @@ export async function encode(
   try {
     result = module.encode(
       inputPtr,
-      inputSize,
-      width,
-      height,
-      channels,
-      inputBitDepth,
+      imageData.data.byteLength,
+      imageData.width,
+      imageData.height,
+      imageData.channels,
+      imageData.bitDepth,
       wasmOptions,
     );
   } finally {
     module._free(inputPtr);
   }
-  const t3 = profilingEnabled ? performance.now() : 0;
+  const t3 = isProfilingEnabled() ? performance.now() : 0;
 
   if (result.error) {
     throw new Error(`AVIF encode error: ${result.error}`);
@@ -209,14 +159,14 @@ export async function encode(
     new Uint8Array(module.HEAPU8.buffer, result.dataPtr, result.dataSize),
   );
   module._free(result.dataPtr);
-  const t4 = profilingEnabled ? performance.now() : 0;
+  const t4 = isProfilingEnabled() ? performance.now() : 0;
 
-  if (profilingEnabled) {
-    logProfile({
+  if (isProfilingEnabled()) {
+    logEncodeProfile({
       inputSize,
       outputSize: result.dataSize,
-      dimensions: `${width}x${height}`,
-      inputBitDepth,
+      dimensions: `${imageData.width}x${imageData.height}`,
+      inputBitDepth: imageData.bitDepth,
       outputBitDepth: opts.bitDepth,
       copyToWasm: t2 - t1,
       wasmEncode: t3 - t2,
@@ -232,7 +182,6 @@ export async function encode(
 
   return output;
 }
-
 
 /**
  * Encode ImageData to AVIF with simple options

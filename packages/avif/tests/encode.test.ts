@@ -13,7 +13,9 @@ import {
   initEncoder,
   initDecoder,
   isEncoderInitialized,
+  DEFAULT_SRGB_METADATA,
 } from "@dimkatet/jcodecs-avif";
+import type { AVIFImageData } from "@dimkatet/jcodecs-avif";
 
 /**
  * Create a test ImageData with a simple gradient pattern
@@ -346,6 +348,157 @@ describe("AVIF Encoder", () => {
       const encoded = await encode(imageData, { tune: "psnr" });
 
       expect(encoded.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("validation", () => {
+    it("should reject unsupported dataType (float32)", async () => {
+      const extendedData: any = {
+        data: new Float32Array(16 * 16 * 4),
+        dataType: "float32",
+        width: 16,
+        height: 16,
+        channels: 4,
+        bitDepth: 32,
+      };
+
+      await expect(encode(extendedData)).rejects.toThrow(
+        'AVIF encoder: unsupported dataType "float32"'
+      );
+    });
+
+    it("should reject unsupported dataType (float16)", async () => {
+      const extendedData: any = {
+        data: new Float16Array(16 * 16 * 4),
+        dataType: "float16",
+        width: 16,
+        height: 16,
+        channels: 4,
+        bitDepth: 16,
+      };
+
+      await expect(encode(extendedData)).rejects.toThrow(
+        'AVIF encoder: unsupported dataType "float16"'
+      );
+    });
+
+    it("should reject dataType mismatch (uint8 with Uint16Array)", async () => {
+      const extendedData: any = {
+        data: new Uint16Array(16 * 16 * 4),
+        dataType: "uint8",
+        width: 16,
+        height: 16,
+        channels: 4,
+        bitDepth: 8,
+      };
+
+      await expect(encode(extendedData)).rejects.toThrow(
+        'dataType "uint8" requires Uint8Array'
+      );
+    });
+
+    it("should reject dataType mismatch (uint16 with Uint8Array)", async () => {
+      const extendedData: any = {
+        data: new Uint8Array(16 * 16 * 4),
+        dataType: "uint16",
+        width: 16,
+        height: 16,
+        channels: 4,
+        bitDepth: 16,
+      };
+
+      await expect(encode(extendedData)).rejects.toThrow(
+        'dataType "uint16" requires Uint16Array'
+      );
+    });
+  });
+
+  describe("ExtendedImageData encoding", () => {
+    it("should encode uint8 ExtendedImageData", async () => {
+      const data = new Uint8Array(16 * 16 * 4);
+      // Fill with gradient
+      for (let i = 0; i < data.length; i += 4) {
+        data[i] = (i / 4) % 256;
+        data[i + 1] = 128;
+        data[i + 2] = 200;
+        data[i + 3] = 255;
+      }
+
+      const extendedData: AVIFImageData = {
+        data,
+        dataType: "uint8",
+        width: 16,
+        height: 16,
+        channels: 4,
+        bitDepth: 8,
+        metadata: DEFAULT_SRGB_METADATA,
+      };
+
+      const encoded = await encode(extendedData);
+      expect(encoded.length).toBeGreaterThan(0);
+
+      // Verify round-trip preserves dataType
+      const decoded = await decode(encoded);
+      expect(decoded.dataType).toBe("uint8");
+      expect(decoded.data).toBeInstanceOf(Uint8Array);
+    });
+
+    it("should encode uint16 ExtendedImageData", async () => {
+      const data = new Uint16Array(16 * 16 * 4);
+      // Fill with 10-bit gradient
+      for (let i = 0; i < data.length; i += 4) {
+        data[i] = ((i / 4) * 4) % 1024; // 10-bit range
+        data[i + 1] = 512;
+        data[i + 2] = 800;
+        data[i + 3] = 1023;
+      }
+
+      const extendedData: AVIFImageData = {
+        data,
+        dataType: "uint16",
+        width: 16,
+        height: 16,
+        channels: 4,
+        bitDepth: 10,
+        metadata: DEFAULT_SRGB_METADATA,
+      };
+
+      const encoded = await encode(extendedData, { bitDepth: 10 });
+      expect(encoded.length).toBeGreaterThan(0);
+
+      // Verify round-trip preserves dataType
+      const decoded = await decode(encoded);
+      expect(decoded.dataType).toBe("uint16");
+      expect(decoded.data).toBeInstanceOf(Uint16Array);
+      expect(decoded.bitDepth).toBe(10);
+    });
+
+    it("should encode uint16 ExtendedImageData with 12-bit depth", async () => {
+      const data = new Uint16Array(16 * 16 * 4);
+      // Fill with 12-bit values
+      for (let i = 0; i < data.length; i += 4) {
+        data[i] = ((i / 4) * 16) % 4096; // 12-bit range
+        data[i + 1] = 2048;
+        data[i + 2] = 3200;
+        data[i + 3] = 4095;
+      }
+
+      const extendedData: AVIFImageData = {
+        data,
+        dataType: "uint16",
+        width: 16,
+        height: 16,
+        channels: 4,
+        bitDepth: 12,
+        metadata: DEFAULT_SRGB_METADATA,
+      };
+
+      const encoded = await encode(extendedData, { bitDepth: 12 });
+      expect(encoded.length).toBeGreaterThan(0);
+
+      const decoded = await decode(encoded);
+      expect(decoded.dataType).toBe("uint16");
+      expect(decoded.bitDepth).toBe(12);
     });
   });
 });

@@ -31,6 +31,8 @@ export type {
 
 export { DEFAULT_ENCODE_OPTIONS, DEFAULT_DECODE_OPTIONS } from './options';
 
+export { enableProfiling } from './profiling'
+
 // AVIF-specific types
 export type {
   AVIFMetadata,

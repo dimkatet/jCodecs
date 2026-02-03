@@ -100,14 +100,35 @@ export interface AVIFMetadata {
 }
 
 // ============================================================================
+// AVIF-specific data types
+// ============================================================================
+
+/**
+ * AVIF supported pixel data types.
+ * Note: AVIF (libavif) only supports integer formats, no float.
+ */
+export type AVIFDataType = 'uint8' | 'uint16';
+
+/**
+ * Supported types for runtime validation
+ */
+export const SUPPORTED_DATA_TYPES: readonly AVIFDataType[] = [
+  'uint8',
+  'uint16',
+] as const;
+
+// ============================================================================
 // AVIF-typed exports
 // ============================================================================
 
 /** AVIF image data with AVIF-specific metadata */
-export type AVIFImageData = ExtendedImageData<AVIFMetadata>;
+export type AVIFImageData = ExtendedImageData<AVIFDataType, AVIFMetadata>;
 
 /** AVIF image info (without pixel data) */
 export type AVIFImageInfo = ImageInfo<AVIFMetadata>;
+
+/** AVIF encode input (can be standard ImageData or extended) */
+export type AVIFEncodeInput = AVIFImageData | ImageData;
 
 // ============================================================================
 // Default metadata

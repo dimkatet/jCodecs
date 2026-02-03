@@ -1,10 +1,30 @@
 # @dimkatet/jcodecs-avif
 
+## 0.5.0
+
+### Minor Changes
+
+- Package refactoring: The code has been split into modules for improved readability and reusability.
+
+  The following files have been moved to separate ones: metadata.ts (metadata conversion from WASM), profiling.ts (encode/decode profiling), and validation.ts (dataType validation).
+
+  Support for the DataType system from @jcodecs/core has been added. The decoder now uses copyFromWasmByType for type-safe data copying. Validation of TypedArray and dataType conformance during encoding has been added.
+
+  Deprecated browser tests have been removed and the tests have been restructured.
+
+## 0.4.2
+
+### Patch Changes
+
+- Updated dependencies
+  - @dimkatet/jcodecs-core@0.5.0
+
 ## 0.4.1
 
 ### Patch Changes
 
 - Updated dependencies
+
   - @dimkatet/jcodecs-core@0.4.0
 
 - Migrate to shared utilities from @jcodecs/core
@@ -12,7 +32,6 @@
   - Use `isMultiThreadSupported`, `validateThreadCount`, `copyToWasm` from core
   - Remove duplicated utility functions
   - Re-export `isMultiThreadSupported` for backward compatibility
-
 
 ## 0.4.0
 
