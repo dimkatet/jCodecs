@@ -46,11 +46,29 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:avif-cache
           cache-to: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && format('type=registry,ref={0}/{1}:avif-cache,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
 
-      - name: Upload WASM artifacts
+      # Build and cache JXL WASM
+      - name: Build JXL WASM
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: jxl
+          push: false
+          outputs: type=local,dest=packages/jxl/src/wasm
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:jxl-cache
+          cache-to: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && format('type=registry,ref={0}/{1}:jxl-cache,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
+
+      - name: Upload AVIF WASM artifacts
         uses: actions/upload-artifact@v4
         with:
           name: wasm-avif
           path: packages/avif/src/wasm/*.js
+          retention-days: 1
+
+      - name: Upload JXL WASM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-jxl
+          path: packages/jxl/src/wasm/*.js
           retention-days: 1
 
   # TypeScript build and tests
@@ -73,11 +91,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Download WASM artifacts
+      - name: Download AVIF WASM artifacts
         uses: actions/download-artifact@v4
         with:
           name: wasm-avif
           path: packages/avif/src/wasm
+
+      - name: Download JXL WASM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-jxl
+          path: packages/jxl/src/wasm
 
       - name: Build TypeScript
         run: pnpm build:ts
@@ -113,11 +137,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Download WASM artifacts
+      - name: Download AVIF WASM artifacts
         uses: actions/download-artifact@v4
         with:
           name: wasm-avif
           path: packages/avif/src/wasm
+
+      - name: Download JXL WASM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-jxl
+          path: packages/jxl/src/wasm
 
       - name: Download dist artifacts
         uses: actions/download-artifact@v4

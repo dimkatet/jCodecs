@@ -44,6 +44,16 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:avif-cache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:avif-cache,mode=max
 
+      - name: Build JXL WASM
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: jxl
+          push: false
+          outputs: type=local,dest=packages/jxl/src/wasm
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:jxl-cache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:jxl-cache,mode=max
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 
