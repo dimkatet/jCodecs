@@ -1,0 +1,75 @@
+{
+  "name": "@dimkatet/jcodecs-jxl",
+  "version": "0.2.0",
+  "description": "JPEG-XL encoder/decoder using libjxl compiled to WebAssembly",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./encode": {
+      "types": "./dist/encode.d.ts",
+      "import": "./dist/encode.js",
+      "require": "./dist/encode.cjs"
+    },
+    "./decode": {
+      "types": "./dist/decode.d.ts",
+      "import": "./dist/decode.js",
+      "require": "./dist/decode.cjs"
+    },
+    "./worker": {
+      "types": "./dist/worker-api.d.ts",
+      "import": "./dist/worker-api.js",
+      "require": "./dist/worker-api.cjs"
+    },
+    "./wasm/*": "./dist/*"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "pnpm build:wasm && pnpm build:ts",
+    "build:wasm": "docker build --target jxl --output type=local,dest=src/wasm -f ../../Dockerfile ../..",
+    "build:ts": "tsup && cp src/wasm/*.js dist/",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@dimkatet/jcodecs-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/emscripten": "^1.39.10",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.0.18"
+  },
+  "keywords": [
+    "jpegxl",
+    "jxl",
+    "image",
+    "codec",
+    "encoder",
+    "decoder",
+    "wasm",
+    "webassembly",
+    "libjxl",
+    "hdr"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dimkatet/jCodecs.git",
+    "directory": "packages/jxl"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
+}

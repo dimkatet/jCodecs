@@ -168,8 +168,67 @@ COPY --from=avif-build /build/avif-wasm/avif_enc.d.ts /
 COPY --from=avif-build /build/avif-wasm/avif_enc_mt.js /
 COPY --from=avif-build /build/avif-wasm/avif_enc_mt.d.ts /
 
-# === JXL: (placeholder for future) ===
-# FROM common AS jxl-build
-# ...
-# FROM scratch AS jxl
-# ...
+# === JXL: libjxl encoder/decoder ===
+FROM common AS jxl-build
+
+ARG LIBJXL_VERSION=v0.10.3
+
+# Clone libjxl with submodules (highway, brotli, skcms)
+WORKDIR /src
+RUN git clone --depth 1 --recursive --branch ${LIBJXL_VERSION} https://github.com/libjxl/libjxl.git
+
+# Build libjxl with Emscripten
+WORKDIR /build/libjxl
+RUN emcmake cmake /src/libjxl \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_FLAGS="-pthread -msimd128" \
+    -DCMAKE_CXX_FLAGS="-pthread -msimd128" \
+    -DBUILD_TESTING=OFF \
+    -DJPEGXL_ENABLE_TOOLS=OFF \
+    -DJPEGXL_ENABLE_DOXYGEN=OFF \
+    -DJPEGXL_ENABLE_MANPAGES=OFF \
+    -DJPEGXL_ENABLE_BENCHMARK=OFF \
+    -DJPEGXL_ENABLE_EXAMPLES=OFF \
+    -DJPEGXL_ENABLE_JNI=OFF \
+    -DJPEGXL_ENABLE_SJPEG=OFF \
+    -DJPEGXL_ENABLE_OPENEXR=OFF \
+    -DJPEGXL_ENABLE_SKCMS=ON \
+    -DJPEGXL_ENABLE_VIEWERS=OFF \
+    -DJPEGXL_ENABLE_TCMALLOC=OFF \
+    -DJPEGXL_BUNDLE_LIBPNG=OFF \
+    -DJPEGXL_ENABLE_TRANSCODE_JPEG=OFF \
+    -DJPEGXL_STATIC=ON \
+    -DJPEGXL_FORCE_SYSTEM_BROTLI=OFF \
+    -DJPEGXL_FORCE_SYSTEM_HWY=OFF \
+    -G Ninja \
+    && ninja jxl jxl_cms jxl_threads
+
+# Copy WASM source and build
+COPY packages/jxl/src/wasm /src/jxl-wasm
+
+WORKDIR /build/jxl-wasm
+RUN emcmake cmake /src/jxl-wasm \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DLIBJXL_LIB="/build/libjxl/lib/libjxl.a" \
+    -DLIBJXL_THREADS_LIB="/build/libjxl/lib/libjxl_threads.a" \
+    -DLIBJXL_CMS_LIB="/build/libjxl/lib/libjxl_cms.a" \
+    -DHWY_LIB="/build/libjxl/third_party/highway/libhwy.a" \
+    -DBROTLI_ENC_LIB="/build/libjxl/third_party/brotli/libbrotlienc.a" \
+    -DBROTLI_DEC_LIB="/build/libjxl/third_party/brotli/libbrotlidec.a" \
+    -DBROTLI_COMMON_LIB="/build/libjxl/third_party/brotli/libbrotlicommon.a" \
+    -DLIBJXL_INCLUDE="/src/libjxl/lib/include;/build/libjxl/lib/include" \
+    -DLIBYUV_LIB="/build/libyuv/libyuv.a" \
+    -DBUILD_MT=ON \
+    -G Ninja \
+    && ninja
+
+# === JXL: Output stage (only artifacts) ===
+FROM scratch AS jxl
+COPY --from=jxl-build /build/jxl-wasm/jxl_dec.js /
+COPY --from=jxl-build /build/jxl-wasm/jxl_dec.d.ts /
+COPY --from=jxl-build /build/jxl-wasm/jxl_dec_mt.js /
+COPY --from=jxl-build /build/jxl-wasm/jxl_dec_mt.d.ts /
+COPY --from=jxl-build /build/jxl-wasm/jxl_enc.js /
+COPY --from=jxl-build /build/jxl-wasm/jxl_enc.d.ts /
+COPY --from=jxl-build /build/jxl-wasm/jxl_enc_mt.js /
+COPY --from=jxl-build /build/jxl-wasm/jxl_enc_mt.d.ts /
