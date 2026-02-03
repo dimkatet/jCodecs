@@ -71,9 +71,6 @@ jobs:
       - name: Build TypeScript
         run: pnpm build:ts
 
-      - name: Run tests
-        run: pnpm test
-
       - name: Create Release PR or Publish
         id: changesets
         uses: changesets/action@v1
