@@ -1,7 +1,10 @@
 import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
 export default defineConfig({
-  server: { 
+  plugins: [react()],
+
+  server: {
     fs: { allow: ["..", '../../packages'] },
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
@@ -10,7 +13,7 @@ export default defineConfig({
   },
 
   optimizeDeps: {
-    exclude: ["@dimkatet/jcodecs-avif"],
+    exclude: ["@dimkatet/jcodecs-avif", "@dimkatet/jcodecs-jxl"],
   },
 
 });
