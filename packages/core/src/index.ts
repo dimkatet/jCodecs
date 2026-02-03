@@ -1,5 +1,6 @@
 // Types
 export type {
+  DataType,
   ExtendedImageData,
   ImageInfo,
   ProgressCallback,
@@ -14,8 +15,13 @@ export type { WASMModule } from './memory';
 // WASM utils (standalone functions)
 export {
   copyToWasm,
+  copyToWasm16f,
+  copyToWasm32f,
   copyFromWasm,
   copyFromWasm16,
+  copyFromWasm16f,
+  copyFromWasm32f,
+  copyFromWasmByType,
   withWasmBuffer,
 } from './wasm-utils';
 
@@ -33,3 +39,5 @@ export { CodecWorkerClient } from './codec-worker-client';
 export type { CodecWorkerClientConfig } from './codec-worker-client';
 
 export type { CodecWorkerHandlers, CodecWorkerMethods } from './protocol';
+
+export { getExtendedImageData } from './image-data'

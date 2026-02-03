@@ -6,10 +6,65 @@
  */
 
 import type { WASMModule } from "./memory";
+import type { DataType } from "./types";
+
+/**
+ * Maps DataType to corresponding TypedArray type
+ */
+type TypedArrayForDataType<T extends DataType> =
+  T extends 'uint8' ? Uint8Array :
+  T extends 'uint16' ? Uint16Array :
+  T extends 'float16' ? Float16Array :
+  T extends 'float32' ? Float32Array :
+  never;
+
+/**
+ * Copy Float32Array data to WASM heap.
+ * @param module - WASM module
+ * @param data - Float32Array to copy
+ * @returns Pointer to allocated memory (caller must free!)
+ */
+export function copyToWasm32f(
+  module: Pick<WASMModule, '_malloc' | 'HEAPU8'>,
+  data: Float32Array,
+): number {
+  const size = data.byteLength;
+  const ptr = module._malloc(size);
+
+  if (ptr === 0) {
+    throw new Error(`Failed to allocate ${size} bytes in WASM memory`);
+  }
+
+  const heap = new Float32Array(module.HEAPU8.buffer, ptr, data.length);
+  heap.set(data);
+  return ptr;
+}
+
+/**
+ * Copy Float16Array data to WASM heap.
+ * @param module - WASM module
+ * @param data - Float16Array to copy
+ * @returns Pointer to allocated memory (caller must free!)
+ */
+export function copyToWasm16f(
+  module: Pick<WASMModule, '_malloc' | 'HEAPU8'>,
+  data: Float16Array,
+): number {
+  const size = data.byteLength;
+  const ptr = module._malloc(size);
+
+  if (ptr === 0) {
+    throw new Error(`Failed to allocate ${size} bytes in WASM memory`);
+  }
+
+  const heap = new Float16Array(module.HEAPU8.buffer, ptr, data.length);
+  heap.set(data);
+  return ptr;
+}
 
 /**
  * Copy TypedArray data to WASM heap and return pointer.
- * Supports Uint8Array and Uint16Array.
+ * Supports Uint8Array, Uint16Array, Float16Array, and Float32Array.
  *
  * @param module - WASM module with _malloc and HEAPU8
  * @param data - Data to copy
@@ -17,8 +72,15 @@ import type { WASMModule } from "./memory";
  */
 export function copyToWasm(
   module: Pick<WASMModule, '_malloc' | 'HEAPU8'>,
-  data: Uint8Array | Uint16Array,
+  data: Uint8Array | Uint16Array | Float16Array | Float32Array,
 ): number {
+  if (data instanceof Float32Array) {
+    return copyToWasm32f(module, data);
+  }
+  if (data instanceof Float16Array) {
+    return copyToWasm16f(module, data);
+  }
+
   const byteLength =
     data instanceof Uint16Array ? data.byteLength : data.length;
   const ptr = module._malloc(byteLength);
@@ -72,6 +134,70 @@ export function copyFromWasm16(
   const result = new Uint16Array(length);
   result.set(new Uint16Array(module.HEAPU8.buffer, ptr, length));
   return result;
+}
+
+/**
+ * Copy data from WASM heap as Float32Array.
+ *
+ * @param module - WASM module with HEAPU8
+ * @param ptr - Pointer to WASM memory (byte offset)
+ * @param length - Number of Float32 elements (not bytes!)
+ */
+export function copyFromWasm32f(
+  module: Pick<WASMModule, 'HEAPU8'>,
+  ptr: number,
+  length: number,
+): Float32Array {
+  const result = new Float32Array(length);
+  result.set(new Float32Array(module.HEAPU8.buffer, ptr, length));
+  return result;
+}
+
+/**
+ * Copy data from WASM heap as Float16Array.
+ *
+ * @param module - WASM module with HEAPU8
+ * @param ptr - Pointer to WASM memory (byte offset)
+ * @param length - Number of Float16 elements (not bytes!)
+ */
+export function copyFromWasm16f(
+  module: Pick<WASMModule, 'HEAPU8'>,
+  ptr: number,
+  length: number,
+): Float16Array {
+  const result = new Float16Array(length);
+  result.set(new Float16Array(module.HEAPU8.buffer, ptr, length));
+  return result;
+}
+
+/**
+ * Copy data from WASM heap with automatic type detection.
+ * Returns the correct TypedArray type based on dataType parameter.
+ *
+ * @param module - WASM module with HEAPU8
+ * @param ptr - Pointer to WASM memory (byte offset)
+ * @param length - Number of elements (not bytes!)
+ * @param dataType - Data type string
+ * @returns Typed array of the correct type
+ */
+export function copyFromWasmByType<T extends DataType>(
+  module: Pick<WASMModule, 'HEAPU8'>,
+  ptr: number,
+  length: number,
+  dataType: T,
+): TypedArrayForDataType<T> {
+  switch (dataType) {
+    case 'float32':
+      return copyFromWasm32f(module, ptr, length) as TypedArrayForDataType<T>;
+    case 'float16':
+      return copyFromWasm16f(module, ptr, length) as TypedArrayForDataType<T>;
+    case 'uint16':
+      return copyFromWasm16(module, ptr, length) as TypedArrayForDataType<T>;
+    case 'uint8':
+      return copyFromWasm(module, ptr, length) as TypedArrayForDataType<T>;
+    default:
+      throw new Error(`Unsupported dataType: ${dataType}`);
+  }
 }
 
 /**

@@ -1,5 +1,15 @@
 # @dimkatet/jcodecs-core
 
+## 0.5.0
+
+### Minor Changes
+
+- Expanded data type support for working with HDR images.
+
+  A DataType has been added to describe pixel data formats: uint8, uint16, float16, and float32. ExtendedImageData is now parameterized by data type, ensuring type safety when working with different formats.
+
+  Helpers for copying float data to and from WASM memory have been added to wasm-utils: copyToWasm16f, copyToWasm32f, copyFromWasm16f, and copyFromWasm32f. A universal copyFromWasmByType has also been added, inferring the type of the returned array based on the DataType.
+
 ## 0.4.0
 
 ### Minor Changes

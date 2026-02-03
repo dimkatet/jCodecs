@@ -1,20 +1,49 @@
 // ============================================================================
+// Data Type Definitions
+// ============================================================================
+
+/**
+ * Supported pixel data types
+ * - uint8: 8-bit unsigned integer
+ * - uint16: 10/12/16-bit unsigned integer (stored in Uint16Array)
+ * - float16: 16-bit IEEE 754 half-precision float
+ * - float32: 32-bit IEEE 754 single-precision float
+ */
+export type DataType = 'uint8' | 'uint16' | 'float16' | 'float32';
+
+/**
+ * Map DataType to corresponding TypedArray type
+ */
+type TypedArrayForDataType<T extends DataType> =
+  T extends 'uint8' ? Uint8Array :
+  T extends 'uint16' ? Uint16Array :
+  T extends 'float16' ? Float16Array :
+  T extends 'float32' ? Float32Array :
+  never;
+
+// ============================================================================
 // Extended ImageData (generic - metadata defined by codec)
 // ============================================================================
 
 /**
  * Extended image data with codec-specific metadata
+ * @template TDataType - Pixel data type (uint8, uint16, float16, float32)
  * @template TMeta - Codec-specific metadata type (defined by each codec package)
  */
-export interface ExtendedImageData<TMeta = unknown> {
-  /** Raw pixel data - Uint8Array for 8-bit, Uint16Array for 10/12/16-bit */
-  data: Uint8Array | Uint16Array;
+export interface ExtendedImageData<
+  TDataType extends DataType = DataType,
+  TMeta = unknown
+> {
+  /** Raw pixel data - typed array matching dataType */
+  data: TypedArrayForDataType<TDataType>;
+  /** Data type - defines storage format */
+  dataType: TDataType;
+  /** Bit depth - real data precision (8, 10, 12, 16, 32) */
+  bitDepth: number;
   /** Image width in pixels */
   width: number;
   /** Image height in pixels */
   height: number;
-  /** Bit depth per channel */
-  bitDepth: 8 | 10 | 12 | 16;
   /** Number of channels in the image */
   channels: number;
   /** Codec-specific metadata */
@@ -58,14 +87,14 @@ export interface CodecModule<
   TMeta = unknown,
 > {
   encode(
-    imageData: ImageData | ExtendedImageData<TMeta>,
+    imageData: ImageData | ExtendedImageData<DataType, TMeta>,
     options?: TEncodeOptions
   ): Promise<Uint8Array>;
 
   decode(
     data: Uint8Array | ArrayBuffer,
     options?: TDecodeOptions
-  ): Promise<ExtendedImageData<TMeta>>;
+  ): Promise<ExtendedImageData<DataType, TMeta>>;
 
   init(wasmUrl?: string): Promise<void>;
 
