@@ -21,6 +21,8 @@ jobs:
     outputs:
       wasm-avif: ${{ steps.filter.outputs.wasm-avif }}
       wasm-jxl: ${{ steps.filter.outputs.wasm-jxl }}
+      cache-avif-exists: ${{ steps.check-avif.outputs.cache-hit }}
+      cache-jxl-exists: ${{ steps.check-jxl.outputs.cache-hit }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -35,6 +37,22 @@ jobs:
               - 'packages/jxl/src/wasm/**'
               - 'Dockerfile'
               - 'emscripten-cross.txt'
+            # Check if WASM caches exist (lookup only, no download)
+      - name: Check AVIF WASM cache
+        id: check-avif
+        uses: actions/cache/restore@v4
+        with:
+          path: packages/avif/src/wasm/*.js
+          key: wasm-avif-${{ hashFiles('packages/avif/src/wasm/**', 'Dockerfile', 'emscripten-cross.txt') }}
+          lookup-only: true
+
+      - name: Check JXL WASM cache
+        id: check-jxl
+        uses: actions/cache/restore@v4
+        with:
+          path: packages/jxl/src/wasm/*.js
+          key: wasm-jxl-${{ hashFiles('packages/jxl/src/wasm/**', 'Dockerfile', 'emscripten-cross.txt') }}
+          lookup-only: true
 
   # Build AVIF WASM only if sources changed
   build-wasm-avif:
@@ -137,14 +155,14 @@ jobs:
 
       # AVIF: download artifact if rebuilt, otherwise restore from cache
       - name: Download AVIF WASM artifact (if rebuilt)
-        if: needs.changes.outputs.wasm-avif == 'true'
+        if: needs.changes.outputs.wasm-avif == 'true' || needs.changes.outputs.cache-avif-exists != 'true'
         uses: actions/download-artifact@v4
         with:
           name: wasm-avif-built
           path: packages/avif/src/wasm
 
       - name: Restore AVIF WASM from cache (if not rebuilt)
-        if: needs.changes.outputs.wasm-avif != 'true'
+        if: needs.changes.outputs.wasm-avif != 'true' && needs.changes.outputs.cache-avif-exists == 'true'
         uses: actions/cache/restore@v4
         with:
           path: packages/avif/src/wasm/*.js
@@ -153,14 +171,14 @@ jobs:
 
       # JXL: download artifact if rebuilt, otherwise restore from cache
       - name: Download JXL WASM artifact (if rebuilt)
-        if: needs.changes.outputs.wasm-jxl == 'true'
+        if: needs.changes.outputs.wasm-jxl == 'true' || needs.changes.outputs.cache-jxl-exists != 'true'
         uses: actions/download-artifact@v4
         with:
           name: wasm-jxl-built
           path: packages/jxl/src/wasm
 
       - name: Restore JXL WASM from cache (if not rebuilt)
-        if: needs.changes.outputs.wasm-jxl != 'true'
+        if: needs.changes.outputs.wasm-jxl != 'true' && needs.changes.outputs.cache-jxl-exists == 'true'
         uses: actions/cache/restore@v4
         with:
           path: packages/jxl/src/wasm/*.js
