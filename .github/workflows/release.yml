@@ -1,20 +1,19 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: dimkatet/jcodecs-wasm-cache
-
 jobs:
   release:
+    # Only run if CI succeeded
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -23,36 +22,24 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          # Checkout the commit that triggered the CI workflow
+          ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Build AVIF WASM
-        uses: docker/build-push-action@v6
+      # Restore WASM from cache (CI already built and cached it)
+      - name: Restore AVIF WASM from cache
+        uses: actions/cache/restore@v4
         with:
-          context: .
-          target: avif
-          push: false
-          outputs: type=local,dest=packages/avif/src/wasm
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:avif-cache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:avif-cache,mode=max
+          path: packages/avif/src/wasm/*.js
+          key: wasm-avif-${{ hashFiles('packages/avif/src/wasm/**', 'Dockerfile', 'emscripten-cross.txt') }}
+          fail-on-cache-miss: true
 
-      - name: Build JXL WASM
-        uses: docker/build-push-action@v6
+      - name: Restore JXL WASM from cache
+        uses: actions/cache/restore@v4
         with:
-          context: .
-          target: jxl
-          push: false
-          outputs: type=local,dest=packages/jxl/src/wasm
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:jxl-cache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:jxl-cache,mode=max
+          path: packages/jxl/src/wasm/*.js
+          key: wasm-jxl-${{ hashFiles('packages/jxl/src/wasm/**', 'Dockerfile', 'emscripten-cross.txt') }}
+          fail-on-cache-miss: true
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
