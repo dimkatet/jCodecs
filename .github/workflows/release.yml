@@ -31,14 +31,14 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: packages/avif/src/wasm/*.js
-          key: wasm-avif-${{ hashFiles('packages/avif/src/wasm/**', 'Dockerfile', 'emscripten-cross.txt') }}
+          key: wasm-avif-${{ hashFiles('packages/avif/src/wasm/*.cpp', 'packages/avif/src/wasm/CMakeLists.txt', 'Dockerfile', 'emscripten-cross.txt') }}
           fail-on-cache-miss: true
 
       - name: Restore JXL WASM from cache
         uses: actions/cache/restore@v4
         with:
           path: packages/jxl/src/wasm/*.js
-          key: wasm-jxl-${{ hashFiles('packages/jxl/src/wasm/**', 'Dockerfile', 'emscripten-cross.txt') }}
+          key: wasm-jxl-${{ hashFiles('packages/jxl/src/wasm/*.cpp', 'packages/jxl/src/wasm/CMakeLists.txt', 'Dockerfile', 'emscripten-cross.txt') }}
           fail-on-cache-miss: true
 
       - name: Setup pnpm
