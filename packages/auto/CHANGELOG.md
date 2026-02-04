@@ -1,5 +1,11 @@
 # @dimkatet/jcodecs-auto
 
+## 0.2.1
+
+### Patch Changes
+
+- Fix build script
+
 ## 0.2.0
 
 ### Minor Changes

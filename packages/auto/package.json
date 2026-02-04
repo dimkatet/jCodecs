@@ -1,6 +1,6 @@
 {
   "name": "@dimkatet/jcodecs-auto",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Auto-detect image format and select codec for jCodecs",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -39,6 +39,7 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsup",
+    "build:ts": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
