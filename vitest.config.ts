@@ -56,6 +56,36 @@ export default defineConfig({
           },
         }),
       ),
+
+      mergeConfig(
+        baseConfig,
+        defineProject({
+          publicDir: resolve(__dirname, "packages/auto/tests/fixtures"),
+          test: {
+            name: "auto",
+            root: "./packages/auto",
+            browser: {
+              instances: [{ browser: "chromium", name: "auto-chromium" }],
+            },
+          },
+          resolve: {
+            alias: {
+              "@dimkatet/jcodecs-auto": resolve(
+                __dirname,
+                "./packages/auto/dist/index.js",
+              ),
+              "@dimkatet/jcodecs-avif": resolve(
+                __dirname,
+                "./packages/avif/dist/index.js",
+              ),
+              "@dimkatet/jcodecs-jxl": resolve(
+                __dirname,
+                "./packages/jxl/dist/index.js",
+              ),
+            },
+          },
+        }),
+      ),
     ],
   },
 });

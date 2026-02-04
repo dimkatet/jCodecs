@@ -9,6 +9,7 @@ Browser-native image codecs powered by WebAssembly.
 | [@jcodecs/core](./packages/core) | Shared utilities, types, worker pool | Stable |
 | [@jcodecs/avif](./packages/avif) | AVIF encoder/decoder (libavif + dav1d/aom) | Stable |
 | [@jcodecs/jxl](./packages/jxl) | JPEG-XL encoder/decoder (libjxl) | Stable |
+| [@jcodecs/auto](./packages/auto) | Auto-detect format, unified API | Stable |
 
 ## Features
 
@@ -23,17 +24,32 @@ Browser-native image codecs powered by WebAssembly.
 ## Installation
 
 ```bash
-# AVIF codec
-npm install @jcodecs/avif
+# Auto-detect format (recommended for most use cases)
+npm install @jcodecs/auto @jcodecs/avif @jcodecs/jxl
 
-# JPEG-XL codec
-npm install @jcodecs/jxl
-
-# Core utilities (installed as dependency)
-npm install @jcodecs/core
+# Or install individual codecs
+npm install @jcodecs/avif  # AVIF only
+npm install @jcodecs/jxl   # JPEG-XL only
 ```
 
 ## Quick Start
+
+### Auto-detect Format
+
+```typescript
+import { decode, encode, transcode, detectFormat } from '@jcodecs/auto';
+
+// Auto-detect and decode any supported format
+const buffer = await fetch('image.unknown').then(r => r.arrayBuffer());
+const decoded = await decode(buffer);
+console.log(decoded.format, decoded.width, decoded.height);
+
+// Encode to specific format
+const avifBytes = await encode(decoded, { format: 'avif', quality: 80 });
+
+// Transcode between formats
+const jxlBytes = await transcode(avifBuffer, 'jxl', { quality: 90 });
+```
 
 ### AVIF
 
@@ -84,9 +100,10 @@ const decoded = await decodeInWorker(pool, avifBytes);
 
 ## Documentation
 
-- [@jcodecs/core README](./packages/core/README.md) - Core types and utilities
+- [@jcodecs/auto README](./packages/auto/README.md) - Auto-detect format, unified API
 - [@jcodecs/avif README](./packages/avif/README.md) - AVIF codec documentation
 - [@jcodecs/jxl README](./packages/jxl/README.md) - JPEG-XL codec documentation
+- [@jcodecs/core README](./packages/core/README.md) - Core types and utilities
 
 ## Multi-threading
 
@@ -133,7 +150,8 @@ jCodecs/
 ├── packages/
 │   ├── core/          # @jcodecs/core - Shared utilities
 │   ├── avif/          # @jcodecs/avif - AVIF codec
-│   └── jxl/           # @jcodecs/jxl  - JPEG-XL codec
+│   ├── jxl/           # @jcodecs/jxl  - JPEG-XL codec
+│   └── auto/          # @jcodecs/auto - Auto-detect, unified API
 ├── examples/
 │   └── browser-esm/   # Browser demo
 ├── Dockerfile         # Multi-stage WASM build
@@ -147,6 +165,7 @@ jCodecs/
 - [x] HDR float16/float32 support
 - [x] Multi-threaded encoding/decoding
 - [x] Web Workers API
+- [x] Auto-detect format API
 - [ ] WebP codec
 - [ ] OpenEXR codec
 - [ ] Streaming API
