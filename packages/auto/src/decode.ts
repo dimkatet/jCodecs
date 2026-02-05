@@ -136,3 +136,4 @@ export async function getImageInfo(
     metadata: { format, ...info.metadata } as AutoMetadata,
   };
 }
+

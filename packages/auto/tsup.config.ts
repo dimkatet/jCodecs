@@ -7,7 +7,6 @@ export default defineConfig({
     encode: 'src/encode.ts',
     'format-detection': 'src/format-detection.ts',
     'worker-api': 'src/worker-api.ts',
-    worker: 'src/worker.ts',
     types: 'src/types.ts',
     options: 'src/options.ts',
     errors: 'src/errors.ts',

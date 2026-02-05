@@ -16,6 +16,7 @@ export interface CodecAdapter {
   decode(
     input: Uint8Array | ArrayBuffer,
     options?: unknown,
+    config?: { jsUrl?: string },
   ): Promise<unknown>;
 
   decodeToImageData(
@@ -26,6 +27,7 @@ export interface CodecAdapter {
   encode(
     input: unknown,
     options?: unknown,
+    config?: { jsUrl?: string },
   ): Promise<Uint8Array>;
 
   encodeSimple(
@@ -70,6 +72,7 @@ export function isCodecAvailable(format: ImageFormat): boolean {
 export function getAvailableFormats(): ImageFormat[] {
   return [...codecLoaders.keys()];
 }
+
 
 /**
  * Load a codec, throwing if not installed

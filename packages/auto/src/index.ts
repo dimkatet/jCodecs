@@ -92,9 +92,14 @@ export {
   getWorkerPoolStats,
   terminateWorkerPool,
   isWorkerPoolInitialized,
+  isCodecPoolInitialized,
 } from './worker-api';
 
-export type { AutoWorkerPoolConfig, AutoWorkerClient } from './worker-api';
+export type {
+  WorkerPoolConfig,
+  AutoWorkerPoolConfig,
+  AutoWorkerClient,
+} from './worker-api';
 
 // ============================================================================
 // Errors
