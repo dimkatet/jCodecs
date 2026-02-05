@@ -1,6 +1,6 @@
 {
   "name": "@dimkatet/jcodecs-jxl",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "JPEG-XL encoder/decoder using libjxl compiled to WebAssembly",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -26,6 +26,16 @@
       "types": "./dist/worker-api.d.ts",
       "import": "./dist/worker-api.js",
       "require": "./dist/worker-api.cjs"
+    },
+    "./worker-api": {
+      "types": "./dist/worker-api.d.ts",
+      "import": "./dist/worker-api.js",
+      "require": "./dist/worker-api.cjs"
+    },
+    "./urls": {
+      "types": "./dist/urls.d.ts",
+      "import": "./dist/urls.js",
+      "require": "./dist/urls.cjs"
     },
     "./wasm/*": "./dist/*"
   },

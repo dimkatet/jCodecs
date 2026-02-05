@@ -19,6 +19,7 @@ import type {
   ImageMetadata,
   MasteringDisplay as WASMMasteringDisplay,
 } from "./wasm/jxl_dec";
+import { mtDecoderUrl, stDecoderUrl } from "./urls";
 
 type WasmModule = typeof import("./wasm/jxl_dec_mt");
 
@@ -63,10 +64,6 @@ function logProfile(profile: DecodeProfile): void {
   );
 }
 
-// Default URLs - auto-detect MT support (WASM is embedded via SINGLE_FILE)
-const defaultMtJsUrl = new URL("./jxl_dec_mt.js", import.meta.url).href;
-const defaultStJsUrl = new URL("./jxl_dec.js", import.meta.url).href;
-
 export interface InitConfig {
   /** URL to the decoder JS file (jxl_dec.js or jxl_dec_mt.js). WASM is embedded. */
   jsUrl?: string;
@@ -87,7 +84,7 @@ export async function init({ jsUrl, preferMT }: InitConfig = {}): Promise<void> 
   }
 
   const useMT = preferMT && isMultiThreadSupported();
-  const url = jsUrl ?? (useMT ? defaultMtJsUrl : defaultStJsUrl);
+  const url = jsUrl ?? (useMT ? mtDecoderUrl : stDecoderUrl);
 
   initPromise = (async () => {
     isMultiThreadedModule = jsUrl ? jsUrl.includes("_mt") : !!useMT;

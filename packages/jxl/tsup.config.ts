@@ -6,6 +6,7 @@ export default defineConfig({
     encode: 'src/encode.ts',
     decode: 'src/decode.ts',
     options: 'src/options.ts',
+    urls: 'src/urls.ts',
     'worker-api': 'src/worker-api.ts',
     worker: 'src/worker.ts',
   },

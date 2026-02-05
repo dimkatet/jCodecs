@@ -1,5 +1,14 @@
 # @dimkatet/jcodecs-jxl
 
+## 0.2.1
+
+### Patch Changes
+
+- - Extracted all URLs (mt/st decoder/encoder + worker) to a new file `urls.ts`
+  - Updated decode/encode/worker-api to import from `./urls`
+  - Added export `./urls` in package.json
+  - Added `urls` entry in tsup.config
+
 ## 0.2.0
 
 ### Minor Changes

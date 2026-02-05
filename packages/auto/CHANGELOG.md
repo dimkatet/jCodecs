@@ -1,5 +1,13 @@
 # @dimkatet/jcodecs-auto
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @dimkatet/jcodecs-avif@0.5.1
+  - @dimkatet/jcodecs-jxl@0.2.1
+
 ## 0.3.0
 
 ### Minor Changes

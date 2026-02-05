@@ -6,13 +6,13 @@ import { isMultiThreadSupported } from "@dimkatet/jcodecs-core";
 import type { JXLEncodeOptions, JXLDecodeOptions } from "./options";
 import type { JXLImageData } from "./types";
 import type { JXLWorkerHandlers, WorkerInitPayload } from "./worker";
-
-// Default URLs - auto-detect MT support (WASM is embedded via SINGLE_FILE)
-const defaultWorkerUrl = new URL("./worker.js", import.meta.url);
-const mtDecoderUrl = new URL("./jxl_dec_mt.js", import.meta.url).href;
-const stDecoderUrl = new URL("./jxl_dec.js", import.meta.url).href;
-const mtEncoderUrl = new URL("./jxl_enc_mt.js", import.meta.url).href;
-const stEncoderUrl = new URL("./jxl_enc.js", import.meta.url).href;
+import {
+  workerUrl as defaultWorkerUrl,
+  mtDecoderUrl,
+  stDecoderUrl,
+  mtEncoderUrl,
+  stEncoderUrl,
+} from "./urls";
 
 export interface WorkerPoolConfig extends WorkerInitPayload {
   /** Number of workers in the pool */

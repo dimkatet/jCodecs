@@ -11,6 +11,7 @@ import { DEFAULT_ENCODE_OPTIONS } from "./options";
 import type { JXLImageData } from "./types";
 import { validateDataType, validateDataTypeMatch } from "./validation";
 import type { MainModule, EncodeOptions } from "./wasm/jxl_enc";
+import { mtEncoderUrl, stEncoderUrl } from "./urls";
 
 type WasmModule = typeof import("./wasm/jxl_enc_mt");
 
@@ -54,10 +55,6 @@ function logProfile(profile: EncodeProfile): void {
   );
 }
 
-// Default URL (WASM is embedded via SINGLE_FILE)
-const defaultMtJsUrl = new URL("./jxl_enc_mt.js", import.meta.url).href;
-const defaultStJsUrl = new URL("./jxl_enc.js", import.meta.url).href;
-
 export interface InitConfig {
   /** URL to the encoder JS file (jxl_enc.js). WASM is embedded. */
   jsUrl?: string;
@@ -77,7 +74,7 @@ export async function init({ jsUrl, preferMT }: InitConfig = {}): Promise<void> 
   }
 
   const useMT = preferMT && isMultiThreadSupported();
-  const url = jsUrl ?? (useMT ? defaultMtJsUrl : defaultStJsUrl);
+  const url = jsUrl ?? (useMT ? mtEncoderUrl : stEncoderUrl);
 
   initPromise = (async () => {
     isMultiThreadedModule = jsUrl ? jsUrl.includes("_mt") : !!useMT;

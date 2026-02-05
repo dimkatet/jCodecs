@@ -17,7 +17,7 @@ import {
   logDecodeProfile,
 } from "./profiling";
 import { convertMetadata } from "./metadata";
-
+import { mtDecoderUrl, stDecoderUrl } from "./urls";
 
 type WasmModule = typeof import("./wasm/avif_dec_mt");
 
@@ -25,10 +25,6 @@ let decoderModule: MainModule | null = null;
 let isMultiThreadedModule = false;
 let maxThreads = 1;
 let initPromise: Promise<void> | null = null;
-
-// Default URLs - auto-detect MT support (WASM is embedded via SINGLE_FILE)
-const defaultMtJsUrl = new URL("./avif_dec_mt.js", import.meta.url).href;
-const defaultStJsUrl = new URL("./avif_dec.js", import.meta.url).href;
 
 export interface InitConfig {
   /** URL to the decoder JS file (avif_dec.js or avif_dec_mt.js). WASM is embedded. */
@@ -50,7 +46,7 @@ export async function init({ jsUrl, preferMT }: InitConfig = {}): Promise<void> 
   }
 
   const useMT = preferMT && isMultiThreadSupported();
-  const url = jsUrl ?? (useMT ? defaultMtJsUrl : defaultStJsUrl);
+  const url = jsUrl ?? (useMT ? mtDecoderUrl : stDecoderUrl);
 
   initPromise = (async () => {
     isMultiThreadedModule = jsUrl ? jsUrl.includes("_mt") : !!useMT;

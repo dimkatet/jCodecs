@@ -11,6 +11,7 @@ import { isProfilingEnabled, logEncodeProfile } from "./profiling";
 import type { AVIFEncodeInput } from "./types";
 import { validateDataType, validateDataTypeMatch } from "./validation";
 import type { EncodeOptions, MainModule } from "./wasm/avif_enc";
+import { mtEncoderUrl, stEncoderUrl } from "./urls";
 
 type WasmModule = typeof import("./wasm/avif_enc_mt");
 
@@ -18,10 +19,6 @@ let encoderModule: MainModule | null = null;
 let isMultiThreadedModule = false;
 let maxThreads = 1;
 let initPromise: Promise<void> | null = null;
-
-// Default URL (WASM is embedded via SINGLE_FILE)
-const defaultMtJsUrl = new URL("./avif_enc_mt.js", import.meta.url).href;
-const defaultStJsUrl = new URL("./avif_enc.js", import.meta.url).href;
 
 export interface InitConfig {
   /** URL to the encoder JS file (avif_enc.js). WASM is embedded. */
@@ -45,7 +42,7 @@ export async function init({
   }
 
   const useMT = preferMT && isMultiThreadSupported();
-  const url = jsUrl ?? (useMT ? defaultMtJsUrl : defaultStJsUrl);
+  const url = jsUrl ?? (useMT ? mtEncoderUrl : stEncoderUrl);
 
   initPromise = (async () => {
     isMultiThreadedModule = jsUrl ? jsUrl.includes("_mt") : !!useMT;
