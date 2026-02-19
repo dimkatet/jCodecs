@@ -1,4 +1,3 @@
-import type { ExtendedImageData } from "@dimkatet/jcodecs-core";
 import {
   isMultiThreadSupported,
   validateThreadCount,
@@ -8,8 +7,8 @@ import {
 } from "@dimkatet/jcodecs-core";
 import type { JXLEncodeOptions } from "./options";
 import { DEFAULT_ENCODE_OPTIONS } from "./options";
-import type { JXLImageData } from "./types";
-import { validateDataType, validateDataTypeMatch } from "./validation";
+import type { JXLEncodeDescriptor } from "./types";
+import { validateDescriptor, validateDataAgainstDescriptor } from "./validation";
 import type { MainModule, EncodeOptions } from "./wasm/jxl_enc";
 import { mtEncoderUrl, stEncoderUrl } from "./urls";
 
@@ -19,41 +18,6 @@ let encoderModule: MainModule | null = null;
 let isMultiThreadedModule = false;
 let maxThreads = 1;
 let initPromise: Promise<void> | null = null;
-
-// Profiling
-let profilingEnabled = false;
-
-export interface EncodeProfile {
-  inputSize: number;
-  outputSize: number;
-  dimensions: string;
-  inputBitDepth: number;
-  outputBitDepth: number;
-  copyToWasm: number;
-  wasmEncode: number;
-  copyFromWasm: number;
-  total: number;
-}
-
-export function enableProfiling(enabled = true): void {
-  profilingEnabled = enabled;
-}
-
-function logProfile(profile: EncodeProfile): void {
-  if (!profilingEnabled) return;
-
-  console.log(
-    `[JXL Encode Profile] ${profile.dimensions} @ ${profile.inputBitDepth}bit → ${profile.outputBitDepth}bit\n` +
-      `  Input:          ${(profile.inputSize / 1024 / 1024).toFixed(2)} MB\n` +
-      `  Output:         ${(profile.outputSize / 1024).toFixed(1)} KB\n` +
-      `  ─────────────────────────────\n` +
-      `  Copy to WASM:   ${profile.copyToWasm.toFixed(2)} ms\n` +
-      `  WASM encode:    ${profile.wasmEncode.toFixed(2)} ms\n` +
-      `  Copy from WASM: ${profile.copyFromWasm.toFixed(2)} ms\n` +
-      `  ─────────────────────────────\n` +
-      `  TOTAL:          ${profile.total.toFixed(2)} ms`,
-  );
-}
 
 export interface InitConfig {
   /** URL to the encoder JS file (jxl_enc.js). WASM is embedded. */
@@ -91,16 +55,62 @@ export async function init({ jsUrl, preferMT }: InitConfig = {}): Promise<void> 
   await initPromise;
 }
 
+// ============================================================================
+// Descriptor → WASM mapping helpers
+// ============================================================================
+
 /**
- * Encode image data to JXL format
+ * Map core ColorPrimaries to WASM colorSpace string.
+ * The C++ encoder understands: "srgb", "display-p3", "rec2020"
+ */
+function mapPrimariesToColorSpace(primaries: string): string {
+  switch (primaries) {
+    case 'bt709': return 'srgb';
+    case 'displayP3': return 'display-p3';
+    case 'dciP3': return 'display-p3';
+    case 'bt2020': return 'rec2020';
+    default: return 'srgb';
+  }
+}
+
+/**
+ * Map core TransferFunction to WASM transferFunction string.
+ * The C++ encoder understands: "srgb", "pq", "hlg", "linear"
+ */
+function mapTransferFunction(tf: string): string {
+  switch (tf) {
+    case 'srgb': return 'srgb';
+    case 'pq': return 'pq';
+    case 'hlg': return 'hlg';
+    case 'linear': return 'linear';
+    case 'bt709': return 'srgb';
+    default: return 'srgb';
+  }
+}
+
+// ============================================================================
+// Public API
+// ============================================================================
+
+/**
+ * Encode pixel data to JXL format.
+ *
+ * @param data - Raw pixel data
+ * @param descriptor - Image description (dimensions, color, format)
+ * @param options - Encoding parameters (quality, effort, etc.)
+ * @param config - WASM module initialization config
  */
 export async function encode(
-  imageData: ImageData | ExtendedImageData,
+  data: Uint8Array | Uint16Array | Float16Array | Float32Array,
+  descriptor: JXLEncodeDescriptor,
   options: JXLEncodeOptions = {},
   config?: InitConfig,
 ): Promise<Uint8Array> {
   await init(config);
-  const t0 = profilingEnabled ? performance.now() : 0;
+
+  // Validate descriptor and fill defaults
+  const desc = validateDescriptor(descriptor);
+  validateDataAgainstDescriptor(data, desc);
 
   const opts = { ...DEFAULT_ENCODE_OPTIONS, ...options };
   const module = encoderModule!;
@@ -117,80 +127,25 @@ export async function encode(
   }
   opts.maxThreads = validation.validatedCount;
 
-  // Determine input format
-  const width = imageData.width;
-  const height = imageData.height;
-
-  // Check if it's ExtendedImageData with bitDepth
-  const isExtended = "bitDepth" in imageData;
-
-  // Validate dataType if present
-  if (isExtended && "dataType" in imageData) {
-    const extData = imageData as JXLImageData;
-    validateDataType(extData.dataType);
-    validateDataTypeMatch(extData);
-  }
-
-  const inputBitDepth = isExtended
-    ? (imageData as ExtendedImageData).bitDepth
-    : 8;
-  const channels =
-    isExtended && "channels" in imageData
-      ? (imageData as ExtendedImageData).channels
-      : 4; // Standard ImageData is always RGBA
-
-  // Get pixel data and determine data type
-  let pixelData: Uint8Array | Uint16Array | Float16Array | Float32Array;
-  let dataType: 'uint8' | 'uint16' | 'float16' | 'float32';
-
-  if (isExtended && "dataType" in imageData) {
-    // ExtendedImageData with explicit dataType
-    const extData = imageData as JXLImageData;
-    pixelData = extData.data;
-    dataType = extData.dataType;
-  } else if (isExtended && inputBitDepth > 8) {
-    // ExtendedImageData without dataType (legacy)
-    pixelData = (imageData as any).data as Uint16Array;
-    dataType = 'uint16';
-  } else {
-    // Standard ImageData
-    pixelData = new Uint8Array(
-      imageData.data.buffer,
-      imageData.data.byteOffset,
-      imageData.data.byteLength,
-    );
-    dataType = 'uint8';
-  }
-
   // Copy input data to WASM heap using appropriate function
-  const t1 = profilingEnabled ? performance.now() : 0;
+  const { dataType } = desc.numeric;
   let inputPtr: number;
-  let inputSize: number;
-
   if (dataType === 'float32') {
-    inputPtr = copyToWasm32f(module, pixelData as Float32Array);
-    inputSize = (pixelData as Float32Array).byteLength;
+    inputPtr = copyToWasm32f(module, data as Float32Array);
   } else if (dataType === 'float16') {
-    inputPtr = copyToWasm16f(module, pixelData as Float16Array);
-    inputSize = (pixelData as Float16Array).byteLength;
-  } else if (dataType === 'uint16') {
-    inputPtr = copyToWasm(module, pixelData as Uint16Array);
-    inputSize = (pixelData as Uint16Array).byteLength;
+    inputPtr = copyToWasm16f(module, data as Float16Array);
   } else {
-    inputPtr = copyToWasm(module, pixelData as Uint8Array);
-    inputSize = (pixelData as Uint8Array).length;
+    inputPtr = copyToWasm(module, data as Uint8Array | Uint16Array);
   }
 
-  const t2 = profilingEnabled ? performance.now() : 0;
-
-  // Prepare WASM options
+  // Map descriptor + options → WASM EncodeOptions
   const wasmOptions: EncodeOptions = {
     quality: opts.quality,
     effort: opts.effort,
     lossless: opts.lossless,
-    bitDepth: opts.bitDepth,
-    colorSpace: opts.colorSpace,
-    transferFunction: opts.transferFunction,
+    bitDepth: desc.numeric.bitDepth,
+    colorSpace: mapPrimariesToColorSpace(desc.color.primaries!),
+    transferFunction: mapTransferFunction(desc.transfer.function!),
     progressive: opts.progressive,
     maxThreads: opts.maxThreads,
     dataType: dataType,
@@ -200,17 +155,16 @@ export async function encode(
   try {
     result = module.encode(
       inputPtr,
-      inputSize,
-      width,
-      height,
-      channels,
-      inputBitDepth,
+      data.byteLength,
+      desc.geometry.width,
+      desc.geometry.height,
+      desc.channels.count,
+      desc.numeric.bitDepth,
       wasmOptions,
     );
   } finally {
     module._free(inputPtr);
   }
-  const t3 = profilingEnabled ? performance.now() : 0;
 
   if (result.error) {
     throw new Error(`JXL encode error: ${result.error}`);
@@ -222,23 +176,7 @@ export async function encode(
     new Uint8Array(module.HEAPU8.buffer, result.dataPtr, result.dataSize),
   );
   module._free(result.dataPtr);
-  const t4 = profilingEnabled ? performance.now() : 0;
 
-  if (profilingEnabled) {
-    logProfile({
-      inputSize,
-      outputSize: result.dataSize,
-      dimensions: `${width}x${height}`,
-      inputBitDepth,
-      outputBitDepth: opts.bitDepth,
-      copyToWasm: t2 - t1,
-      wasmEncode: t3 - t2,
-      copyFromWasm: t4 - t3,
-      total: t4 - t0,
-    });
-  }
-
-  // Call progress callback if provided
   if (opts.onProgress) {
     opts.onProgress(1, "complete");
   }
@@ -247,13 +185,24 @@ export async function encode(
 }
 
 /**
- * Encode ImageData to JXL with simple options
+ * Encode standard ImageData to JXL with simple options.
+ * Convenience wrapper — constructs descriptor from ImageData.
  */
 export async function encodeSimple(
   imageData: ImageData,
   quality = 75,
 ): Promise<Uint8Array> {
-  return encode(imageData, { quality });
+  const data = new Uint8Array(
+    imageData.data.buffer,
+    imageData.data.byteOffset,
+    imageData.data.byteLength,
+  );
+  const descriptor: JXLEncodeDescriptor = {
+    geometry: { width: imageData.width, height: imageData.height },
+    channels: { model: 'rgba', count: 4 },
+    numeric: { dataType: 'uint8', bitDepth: 8 },
+  };
+  return encode(data, descriptor, { quality });
 }
 
 /**

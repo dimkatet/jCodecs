@@ -53,7 +53,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@dimkatet/jcodecs-core": "workspace:*"
+    "@dimkatet/jcodecs-core": "workspace:*",
+    "valibot": "^1.2.0"
   },
   "devDependencies": {
     "@types/emscripten": "^1.39.10",

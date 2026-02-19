@@ -1,4 +1,4 @@
-// Main exports
+// Encoder
 export {
   encode,
   encodeSimple,
@@ -8,6 +8,7 @@ export {
 
 export type { InitConfig as EncoderInitConfig } from './encode';
 
+// Decoder
 export {
   decode,
   decodeToImageData,
@@ -23,24 +24,18 @@ export type { InitConfig as DecoderInitConfig } from './decode';
 export type {
   JXLEncodeOptions,
   JXLDecodeOptions,
-  ColorSpace,
-  TransferFunctionOption,
 } from './options';
 
 export { DEFAULT_ENCODE_OPTIONS, DEFAULT_DECODE_OPTIONS } from './options';
 
 // JXL-specific types
 export type {
-  JXLMetadata,
+  JXLDataType,
   JXLImageData,
-  JXLImageInfo,
-  ColorPrimaries,
-  TransferFunction,
-  MatrixCoefficients,
-  MasteringDisplay,
+  JXLEncodeDescriptor,
 } from './types';
 
-export { DEFAULT_SRGB_METADATA } from './types';
+export { SUPPORTED_DATA_TYPES } from './types';
 
 // Worker API
 export {
@@ -56,4 +51,4 @@ export type { WorkerPoolConfig, JXLWorkerClient } from './worker-api';
 
 // Re-export from core
 export { isMultiThreadSupported } from '@dimkatet/jcodecs-core';
-export type { ExtendedImageData, ImageInfo } from '@dimkatet/jcodecs-core';
+export type { ImageDescriptor } from '@dimkatet/jcodecs-core';

@@ -1,18 +1,8 @@
-import type { ProgressCallback } from "@dimkatet/jcodecs-core";
-import type { JXLMetadata } from "./types";
+import type { ProgressCallback } from '@dimkatet/jcodecs-core';
 
 /**
- * Color space options
- */
-export type ColorSpace = "srgb" | "display-p3" | "rec2020";
-
-/**
- * Transfer function (OETF) options
- */
-export type TransferFunctionOption = "srgb" | "pq" | "hlg" | "linear";
-
-/**
- * JXL encoding options
+ * JXL encoding options — pure encoding parameters.
+ * Image description (dimensions, color, bit depth, data type) is in JXLEncodeDescriptor.
  */
 export interface JXLEncodeOptions {
   /**
@@ -37,31 +27,7 @@ export interface JXLEncodeOptions {
   lossless?: boolean;
 
   /**
-   * Output bit depth.
-   * @default 8
-   */
-  bitDepth?: 8 | 10 | 12 | 16;
-
-  /**
-   * Output color space.
-   * @default 'srgb'
-   */
-  colorSpace?: ColorSpace;
-
-  /**
-   * Transfer function (OETF) for HDR content.
-   * - 'srgb': Standard sRGB gamma (~2.2)
-   * - 'pq': Perceptual Quantizer (HDR10, Dolby Vision)
-   * - 'hlg': Hybrid Log-Gamma (broadcast HDR)
-   * - 'linear': Linear light (for compositing)
-   * @default 'srgb'
-   */
-  transferFunction?: TransferFunctionOption;
-
-  /**
    * Enable progressive decoding support.
-   * When true, the encoded image can be progressively decoded
-   * showing increasingly detailed previews.
    * @default false
    */
   progressive?: boolean;
@@ -74,11 +40,6 @@ export interface JXLEncodeOptions {
   maxThreads?: number;
 
   /**
-   * Image metadata to embed in the output.
-   */
-  metadata?: Partial<JXLMetadata>;
-
-  /**
    * Progress callback for tracking encoding progress.
    */
   onProgress?: ProgressCallback;
@@ -88,6 +49,19 @@ export interface JXLEncodeOptions {
  * JXL decoding options
  */
 export interface JXLDecodeOptions {
+  /**
+   * Target bit depth for output.
+   * - 0: Auto (use source bit depth / data type from file)
+   * - 8: Force uint8 output (even for HDR/float files)
+   * - 10, 12, 16: Force uint16 output at specified depth
+   *
+   * Note: For float format files (float16/float32), setting bitDepth > 0
+   * forces integer output. Leave at 0 to preserve the native float format.
+   *
+   * @default 0
+   */
+  bitDepth?: 0 | 8 | 10 | 12 | 16;
+
   /**
    * Ignore embedded color profile.
    * @default false
@@ -105,15 +79,10 @@ export interface JXLDecodeOptions {
 /**
  * Default encode options
  */
-export const DEFAULT_ENCODE_OPTIONS: Required<
-  Omit<JXLEncodeOptions, "metadata" | "onProgress">
-> = {
+export const DEFAULT_ENCODE_OPTIONS: Required<Omit<JXLEncodeOptions, 'onProgress'>> = {
   quality: 75,
   effort: 7,
   lossless: false,
-  bitDepth: 8,
-  colorSpace: "srgb",
-  transferFunction: "srgb",
   progressive: false,
   maxThreads: 0,
 };
@@ -122,6 +91,7 @@ export const DEFAULT_ENCODE_OPTIONS: Required<
  * Default decode options
  */
 export const DEFAULT_DECODE_OPTIONS: Required<JXLDecodeOptions> = {
+  bitDepth: 0,
   ignoreColorProfile: false,
   maxThreads: 0,
 };
