@@ -1,5 +1,30 @@
 # @dimkatet/jcodecs-jxl
 
+## 0.3.0
+
+### Minor Changes
+
+- Introduce Canonical Image Descriptor (CID) — breaking API change.
+
+  All codecs now return `{ data, descriptor: ImageDescriptor }` instead of flat
+  `ExtendedImageData`. Encoders take `(data, descriptor, options?)` instead of
+  `(imageData, options)`.
+
+  - **core**: new `ImageDescriptor` type hierarchy (geometry, channels, numeric,
+    color, transfer, luminance, sampling, alpha, hdr, rendering); C++ descriptor
+    builder with Embind bindings; `normalizeDescriptor()` helper
+  - **avif**: `AVIFImageData` and `AVIFEncodeDescriptor`; `bitDepth` in decode
+    options; remove `AVIFMetadata`, `ColorPrimaries`, `MasteringDisplay` etc.
+  - **jxl**: `JXLImageData` and `JXLEncodeDescriptor`; restore `bitDepth` in
+    decode options; float16/float32 encode support via `copyToWasm16f/32f`
+  - **auto**: `AutoImageData` uses `ImageDescriptor` directly; unified encode
+    builds descriptor from source image + option overrides
+
+### Patch Changes
+
+- Updated dependencies
+  - @dimkatet/jcodecs-core@0.6.0
+
 ## 0.2.1
 
 ### Patch Changes
