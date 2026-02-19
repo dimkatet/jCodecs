@@ -1,85 +1,32 @@
-import type { DataType } from '@dimkatet/jcodecs-core';
-import type { AVIFMetadata } from '@dimkatet/jcodecs-avif';
-import type { JXLMetadata } from '@dimkatet/jcodecs-jxl';
+import type { ImageDescriptor } from '@dimkatet/jcodecs-core';
 import type { ImageFormat } from './format-detection';
 
 // ============================================================================
-// Type mappings
+// Unified image data — uses ImageDescriptor from core
 // ============================================================================
-
-type TypedArrayForDataType<T extends DataType> = T extends 'uint8'
-  ? Uint8Array
-  : T extends 'uint16'
-    ? Uint16Array
-    : T extends 'float16'
-      ? Float16Array
-      : T extends 'float32'
-        ? Float32Array
-        : never;
-
-// ============================================================================
-// Discriminated union for metadata
-// ============================================================================
-
-/** Base metadata fields common to all formats */
-export interface BaseMetadata {
-  colorPrimaries: string;
-  transferFunction: string;
-  fullRange: boolean;
-  maxCLL: number;
-  maxPALL: number;
-  masteringDisplay?: {
-    primaries: {
-      red: [number, number];
-      green: [number, number];
-      blue: [number, number];
-    };
-    whitePoint: [number, number];
-    luminance: { min: number; max: number };
-  };
-  iccProfile?: Uint8Array;
-  isHDR: boolean;
-}
-
-/** AVIF metadata with format discriminator */
-export type AVIFAutoMetadata = { format: 'avif' } & AVIFMetadata;
-
-/** JXL metadata with format discriminator */
-export type JXLAutoMetadata = { format: 'jxl' } & JXLMetadata;
-
-/** Unknown format metadata */
-export type UnknownAutoMetadata = { format: 'unknown' } & BaseMetadata;
-
-/** Union of all metadata types with format discriminator */
-export type AutoMetadata = AVIFAutoMetadata | JXLAutoMetadata | UnknownAutoMetadata;
-
-// ============================================================================
-// Unified ImageData type
-// ============================================================================
-
-/** All supported pixel data types */
-export type AutoDataType = DataType;
 
 /**
- * Unified image data with format information
+ * Unified image data with format information and ImageDescriptor.
+ * Returned by auto decode() function.
  */
-export interface AutoImageData<T extends AutoDataType = AutoDataType> {
+export interface AutoImageData {
   /** Raw pixel data */
-  data: TypedArrayForDataType<T>;
-  /** Data type */
-  dataType: T;
-  /** Bit depth (8, 10, 12, 16, 32) */
-  bitDepth: number;
-  /** Image width in pixels */
-  width: number;
-  /** Image height in pixels */
-  height: number;
-  /** Number of channels */
-  channels: number;
+  data: Uint8Array | Uint16Array | Float16Array | Float32Array;
+  /** Image descriptor (geometry, channels, color, transfer, HDR metadata, etc.) */
+  descriptor: ImageDescriptor;
   /** Detected/source format */
   format: ImageFormat;
-  /** Format-specific metadata */
-  metadata: AutoMetadata;
+}
+
+/**
+ * Image info without pixel data.
+ * Returned by auto getImageInfo() function.
+ */
+export interface AutoImageInfo {
+  /** Image descriptor */
+  descriptor: ImageDescriptor;
+  /** Detected/source format */
+  format: ImageFormat;
 }
 
 // ============================================================================
@@ -91,7 +38,7 @@ export interface AutoImageData<T extends AutoDataType = AutoDataType> {
  */
 export function isAVIFImageData(
   data: AutoImageData,
-): data is AutoImageData & { format: 'avif'; metadata: AVIFAutoMetadata } {
+): data is AutoImageData & { format: 'avif' } {
   return data.format === 'avif';
 }
 
@@ -100,30 +47,14 @@ export function isAVIFImageData(
  */
 export function isJXLImageData(
   data: AutoImageData,
-): data is AutoImageData & { format: 'jxl'; metadata: JXLAutoMetadata } {
+): data is AutoImageData & { format: 'jxl' } {
   return data.format === 'jxl';
-}
-
-// ============================================================================
-// Image info (without pixel data)
-// ============================================================================
-
-/**
- * Image info without pixel data
- */
-export interface AutoImageInfo {
-  width: number;
-  height: number;
-  bitDepth: number;
-  channels: number;
-  format: ImageFormat;
-  metadata: AutoMetadata;
 }
 
 // ============================================================================
 // Re-export codec types for convenience
 // ============================================================================
 
-export type { AVIFMetadata, AVIFImageData } from '@dimkatet/jcodecs-avif';
-export type { JXLMetadata, JXLImageData } from '@dimkatet/jcodecs-jxl';
-export type { DataType, ExtendedImageData, ImageInfo } from '@dimkatet/jcodecs-core';
+export type { AVIFImageData, AVIFEncodeDescriptor } from '@dimkatet/jcodecs-avif';
+export type { JXLImageData, JXLEncodeDescriptor } from '@dimkatet/jcodecs-jxl';
+export type { ImageDescriptor } from '@dimkatet/jcodecs-core';

@@ -45,19 +45,12 @@ export { encode, encodeSimple, transcode } from './encode';
 export type {
   AutoImageData,
   AutoImageInfo,
-  AutoMetadata,
-  AutoDataType,
-  AVIFAutoMetadata,
-  JXLAutoMetadata,
-  BaseMetadata,
   // Re-exports from codec packages
-  AVIFMetadata,
   AVIFImageData,
-  JXLMetadata,
+  AVIFEncodeDescriptor,
   JXLImageData,
-  DataType,
-  ExtendedImageData,
-  ImageInfo,
+  JXLEncodeDescriptor,
+  ImageDescriptor,
 } from './types';
 
 export { isAVIFImageData, isJXLImageData } from './types';
