@@ -4,7 +4,7 @@
 import { CodecWorkerClient } from "@dimkatet/jcodecs-core/codec-worker-client";
 import { isMultiThreadSupported } from "@dimkatet/jcodecs-core";
 import type { AVIFEncodeOptions, AVIFDecodeOptions } from "./options";
-import type { AVIFImageData } from "./types";
+import type { AVIFImageData, AVIFEncodeDescriptor } from "./types";
 import type { AVIFWorkerHandlers, WorkerInitPayload } from "./worker";
 import {
   workerUrl as defaultWorkerUrl,
@@ -49,11 +49,11 @@ export async function createWorkerPool(
 
 export async function encodeInWorker(
   client: AVIFWorkerClient,
-  imageData: AVIFImageData,
+  data: Uint8Array | Uint16Array,
+  descriptor: AVIFEncodeDescriptor,
   options?: AVIFEncodeOptions,
 ): Promise<Uint8Array> {
-
-  return client.call("encode", { imageData, options });
+  return client.call("encode", { data, descriptor, options }, [data.buffer]);
 }
 
 export async function decodeInWorker(

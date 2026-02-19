@@ -1,13 +1,15 @@
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
-#include <emscripten.h>
 #include <avif/avif.h>
 #include <cstdint>
 #include <cstring>
 #include <string>
-#include <vector>
+#include <optional>
+
+#include "descriptor.hpp"
 
 using namespace emscripten;
+using namespace jcodecs;
 
 // Max threads constant (defined via CMake for MT builds)
 #ifndef MAX_THREADS
@@ -15,113 +17,67 @@ using namespace emscripten;
 #endif
 
 // ============================================================================
-// CICP to string conversion functions
+// CICP → jcodecs enum mapping
 // ============================================================================
 
-std::string colorPrimariesToString(avifColorPrimaries primaries)
+std::optional<ColorPrimaries> mapColorPrimaries(avifColorPrimaries primaries)
 {
     switch (primaries)
     {
-    case AVIF_COLOR_PRIMARIES_BT709:
-        return "bt709";
-    case AVIF_COLOR_PRIMARIES_BT470M:
-        return "bt470m";
-    case AVIF_COLOR_PRIMARIES_BT470BG:
-        return "bt470bg";
-    case AVIF_COLOR_PRIMARIES_BT601:
-        return "bt601";
-    case AVIF_COLOR_PRIMARIES_SMPTE240:
-        return "smpte240";
-    case AVIF_COLOR_PRIMARIES_GENERIC_FILM:
-        return "generic-film";
-    case AVIF_COLOR_PRIMARIES_BT2020:
-        return "bt2020";
-    case AVIF_COLOR_PRIMARIES_XYZ:
-        return "xyz";
-    case AVIF_COLOR_PRIMARIES_SMPTE431:
-        return "dci-p3";
-    case AVIF_COLOR_PRIMARIES_SMPTE432:
-        return "display-p3";
-    case AVIF_COLOR_PRIMARIES_EBU3213:
-        return "ebu3213";
-    default:
-        return "unknown";
+    case AVIF_COLOR_PRIMARIES_BT709:        return ColorPrimaries::BT709;
+    case AVIF_COLOR_PRIMARIES_BT470M:       return ColorPrimaries::BT470M;
+    case AVIF_COLOR_PRIMARIES_BT470BG:      return ColorPrimaries::BT470BG;
+    case AVIF_COLOR_PRIMARIES_BT601:        return ColorPrimaries::BT601;
+    case AVIF_COLOR_PRIMARIES_SMPTE240:     return ColorPrimaries::SMPTE240;
+    case AVIF_COLOR_PRIMARIES_GENERIC_FILM: return ColorPrimaries::GenericFilm;
+    case AVIF_COLOR_PRIMARIES_BT2020:       return ColorPrimaries::BT2020;
+    case AVIF_COLOR_PRIMARIES_XYZ:          return ColorPrimaries::XYZ;
+    case AVIF_COLOR_PRIMARIES_SMPTE431:     return ColorPrimaries::DCIP3;
+    case AVIF_COLOR_PRIMARIES_SMPTE432:     return ColorPrimaries::DisplayP3;
+    case AVIF_COLOR_PRIMARIES_EBU3213:      return ColorPrimaries::EBU3213;
+    default:                                return std::nullopt;
     }
 }
 
-std::string transferToString(avifTransferCharacteristics tc)
+std::optional<TransferFunction> mapTransferFunction(avifTransferCharacteristics tc)
 {
     switch (tc)
     {
-    case AVIF_TRANSFER_CHARACTERISTICS_BT709:
-        return "bt709";
-    case AVIF_TRANSFER_CHARACTERISTICS_BT470M:
-        return "bt470m";
-    case AVIF_TRANSFER_CHARACTERISTICS_BT470BG:
-        return "bt470bg";
-    case AVIF_TRANSFER_CHARACTERISTICS_BT601:
-        return "bt601";
-    case AVIF_TRANSFER_CHARACTERISTICS_SMPTE240:
-        return "smpte240";
-    case AVIF_TRANSFER_CHARACTERISTICS_LINEAR:
-        return "linear";
-    case AVIF_TRANSFER_CHARACTERISTICS_LOG100:
-        return "log100";
-    case AVIF_TRANSFER_CHARACTERISTICS_LOG100_SQRT10:
-        return "log100-sqrt10";
-    case AVIF_TRANSFER_CHARACTERISTICS_IEC61966:
-        return "iec61966";
-    case AVIF_TRANSFER_CHARACTERISTICS_BT1361:
-        return "bt1361";
-    case AVIF_TRANSFER_CHARACTERISTICS_SRGB:
-        return "srgb";
-    case AVIF_TRANSFER_CHARACTERISTICS_BT2020_10BIT:
-        return "bt2020-10bit";
-    case AVIF_TRANSFER_CHARACTERISTICS_BT2020_12BIT:
-        return "bt2020-12bit";
-    case AVIF_TRANSFER_CHARACTERISTICS_PQ:
-        return "pq";
-    case AVIF_TRANSFER_CHARACTERISTICS_SMPTE428:
-        return "smpte428";
-    case AVIF_TRANSFER_CHARACTERISTICS_HLG:
-        return "hlg";
-    default:
-        return "unknown";
+    case AVIF_TRANSFER_CHARACTERISTICS_BT709:        return TransferFunction::BT709;
+    case AVIF_TRANSFER_CHARACTERISTICS_BT470M:       return TransferFunction::BT470M;
+    case AVIF_TRANSFER_CHARACTERISTICS_BT470BG:      return TransferFunction::BT470BG;
+    case AVIF_TRANSFER_CHARACTERISTICS_BT601:        return TransferFunction::BT601;
+    case AVIF_TRANSFER_CHARACTERISTICS_SMPTE240:     return TransferFunction::SMPTE240;
+    case AVIF_TRANSFER_CHARACTERISTICS_LINEAR:       return TransferFunction::Linear;
+    case AVIF_TRANSFER_CHARACTERISTICS_LOG100:       return TransferFunction::Log100;
+    case AVIF_TRANSFER_CHARACTERISTICS_LOG100_SQRT10:return TransferFunction::Log100Sqrt10;
+    case AVIF_TRANSFER_CHARACTERISTICS_IEC61966:     return TransferFunction::IEC61966;
+    case AVIF_TRANSFER_CHARACTERISTICS_BT1361:       return TransferFunction::BT1361;
+    case AVIF_TRANSFER_CHARACTERISTICS_SRGB:         return TransferFunction::SRGB;
+    case AVIF_TRANSFER_CHARACTERISTICS_BT2020_10BIT: return TransferFunction::BT2020_10bit;
+    case AVIF_TRANSFER_CHARACTERISTICS_BT2020_12BIT: return TransferFunction::BT2020_12bit;
+    case AVIF_TRANSFER_CHARACTERISTICS_PQ:           return TransferFunction::PQ;
+    case AVIF_TRANSFER_CHARACTERISTICS_SMPTE428:     return TransferFunction::SMPTE428;
+    case AVIF_TRANSFER_CHARACTERISTICS_HLG:          return TransferFunction::HLG;
+    default:                                         return std::nullopt;
     }
 }
 
-std::string matrixToString(avifMatrixCoefficients mc)
+std::optional<MatrixCoefficients> mapMatrixCoefficients(avifMatrixCoefficients mc)
 {
     switch (mc)
     {
-    case AVIF_MATRIX_COEFFICIENTS_IDENTITY:
-        return "identity";
-    case AVIF_MATRIX_COEFFICIENTS_BT709:
-        return "bt709";
-    case AVIF_MATRIX_COEFFICIENTS_FCC:
-        return "fcc";
-    case AVIF_MATRIX_COEFFICIENTS_BT470BG:
-        return "bt470bg";
-    case AVIF_MATRIX_COEFFICIENTS_BT601:
-        return "bt601";
-    case AVIF_MATRIX_COEFFICIENTS_SMPTE240:
-        return "smpte240";
-    case AVIF_MATRIX_COEFFICIENTS_YCGCO:
-        return "ycgco";
-    case AVIF_MATRIX_COEFFICIENTS_BT2020_NCL:
-        return "bt2020-ncl";
-    case AVIF_MATRIX_COEFFICIENTS_BT2020_CL:
-        return "bt2020-cl";
-    case AVIF_MATRIX_COEFFICIENTS_SMPTE2085:
-        return "smpte2085";
-    case AVIF_MATRIX_COEFFICIENTS_CHROMA_DERIVED_NCL:
-        return "chroma-derived-ncl";
-    case AVIF_MATRIX_COEFFICIENTS_CHROMA_DERIVED_CL:
-        return "chroma-derived-cl";
-    case AVIF_MATRIX_COEFFICIENTS_ICTCP:
-        return "ictcp";
-    default:
-        return "unknown";
+    case AVIF_MATRIX_COEFFICIENTS_IDENTITY:  return MatrixCoefficients::Identity;
+    case AVIF_MATRIX_COEFFICIENTS_BT709:     return MatrixCoefficients::BT709;
+    case AVIF_MATRIX_COEFFICIENTS_FCC:       return MatrixCoefficients::FCC;
+    case AVIF_MATRIX_COEFFICIENTS_BT470BG:   return MatrixCoefficients::BT601;
+    case AVIF_MATRIX_COEFFICIENTS_BT601:     return MatrixCoefficients::BT601;
+    case AVIF_MATRIX_COEFFICIENTS_SMPTE240:  return MatrixCoefficients::SMPTE240;
+    case AVIF_MATRIX_COEFFICIENTS_YCGCO:     return MatrixCoefficients::YCgCo;
+    case AVIF_MATRIX_COEFFICIENTS_BT2020_NCL:return MatrixCoefficients::BT2020NCL;
+    case AVIF_MATRIX_COEFFICIENTS_BT2020_CL: return MatrixCoefficients::BT2020CL;
+    case AVIF_MATRIX_COEFFICIENTS_ICTCP:     return MatrixCoefficients::ICtCp;
+    default:                                 return std::nullopt;
     }
 }
 
@@ -131,144 +87,113 @@ bool isHDRTransfer(avifTransferCharacteristics tc)
            tc == AVIF_TRANSFER_CHARACTERISTICS_HLG;
 }
 
-struct DecodeTimings
-{
-    double io;
-    double parse;
-    double decode;
-    double yuvToRgb;
-    double memcpy;
-    double total;
-};
-
-// ============================================================================
-// Mastering Display Metadata (SMPTE ST 2086)
-// ============================================================================
-
-struct MasteringDisplay
-{
-    // Chromaticity coordinates (CIE 1931 xy)
-    float redX;
-    float redY;
-    float greenX;
-    float greenY;
-    float blueX;
-    float blueY;
-    float whiteX;
-    float whiteY;
-    // Luminance in nits
-    float minLuminance;
-    float maxLuminance;
-    bool present;
-};
-
-// ============================================================================
-// Metadata structures
-// ============================================================================
-
-struct ImageMetadata
-{
-    // CICP (as readable strings)
-    std::string colorPrimaries;
-    std::string transferFunction;
-    std::string matrixCoefficients;
-    bool fullRange;
-
-    // Content light level
-    uint32_t maxCLL;  // nits
-    uint32_t maxPALL; // nits
-
-    // Mastering display
-    MasteringDisplay masteringDisplay;
-
-    // ICC profile (pointer to malloc'd buffer, caller must free via Module._free)
-    uintptr_t iccProfilePtr;
-    size_t iccProfileSize;
-
-    // Convenience flags
-    bool isHDR;
-};
-
 // ============================================================================
 // Result structures
 // ============================================================================
 
 struct DecodeResult
 {
-    uintptr_t dataPtr; // Pointer to pixel data in WASM heap
-    size_t dataSize;   // Size in bytes
-    uint32_t width;
-    uint32_t height;
-    uint32_t depth;
-    uint32_t channels;
-    ImageMetadata metadata;
+    uintptr_t dataPtr;
+    size_t dataSize;
+    ImageDescriptor descriptor;
     std::string error;
-    DecodeTimings timings;
 };
 
-struct ImageInfo
+// ============================================================================
+// Build ImageDescriptor from avifImage (after YUV→RGB conversion)
+// ============================================================================
+
+ImageDescriptor buildDescriptor(
+    const avifImage *image,
+    uint32_t outputWidth,
+    uint32_t outputHeight,
+    uint32_t outputDepth,
+    uint32_t outputChannels,
+    bool alphaPremultiplied)
 {
-    uint32_t width;
-    uint32_t height;
-    uint32_t depth;
-    uint32_t channels;
-    ImageMetadata metadata;
-};
+    ImageDescriptorBuilder builder;
 
-// Helper to extract metadata from avifImage
-ImageMetadata extractMetadata(const avifImage *image)
-{
-    ImageMetadata meta;
+    // Geometry
+    builder.setGeometry(outputWidth, outputHeight);
 
-    // CICP as strings
-    meta.colorPrimaries = colorPrimariesToString(image->colorPrimaries);
-    meta.transferFunction = transferToString(image->transferCharacteristics);
-    meta.matrixCoefficients = matrixToString(image->matrixCoefficients);
-    meta.fullRange = (image->yuvRange == AVIF_RANGE_FULL);
+    // Channels (post YUV→RGB conversion)
+    ChannelModel model;
+    if (outputChannels == 1) {
+        model = ChannelModel::Gray;
+    } else if (outputChannels == 2) {
+        model = ChannelModel::GrayA;
+    } else if (outputChannels == 4) {
+        model = ChannelModel::RGBA;
+    } else {
+        model = ChannelModel::RGB;
+    }
+    builder.setChannels(model, outputChannels);
 
-    // Content light level
-    meta.maxCLL = image->clli.maxCLL;
-    meta.maxPALL = image->clli.maxPALL;
+    // Numeric
+    DataType dataType = (outputDepth > 8) ? DataType::Uint16 : DataType::Uint8;
+    builder.setNumeric(SampleType::Uint, dataType, outputDepth);
 
-    // Mastering display (SMPTE ST 2086)
-    meta.masteringDisplay.present = false;
-    // libavif stores these as fixed-point: chromaticity * 50000, luminance * 10000
-    if (image->colorPrimaries == AVIF_COLOR_PRIMARIES_BT2020 ||
-        isHDRTransfer(image->transferCharacteristics))
-    {
-        // Check if mastering display data is available via CICP or embedded
-        // For now, we'll try to extract from the image if available
-        // Note: libavif doesn't expose mdcv directly in avifImage in older versions
-        // This may need version-specific handling
+    // Quantization
+    if (image->yuvRange == AVIF_RANGE_FULL) {
+        builder.setQuantization(QuantizationRange::full());
+    } else {
+        builder.setQuantization(QuantizationRange::limited());
     }
 
-    // ICC profile - copy to malloc'd buffer for JS to read
-    if (image->icc.size > 0 && image->icc.data != nullptr)
-    {
-        uint8_t *iccBuffer = static_cast<uint8_t *>(malloc(image->icc.size));
-        if (iccBuffer)
-        {
-            std::memcpy(iccBuffer, image->icc.data, image->icc.size);
-            meta.iccProfilePtr = reinterpret_cast<uintptr_t>(iccBuffer);
-            meta.iccProfileSize = image->icc.size;
-        }
-        else
-        {
-            meta.iccProfilePtr = 0;
-            meta.iccProfileSize = 0;
-        }
-    }
-    else
-    {
-        meta.iccProfilePtr = 0;
-        meta.iccProfileSize = 0;
+    // Sampling (post-conversion: always interleaved RGB)
+    builder.setSampleLayout(SampleLayout::Interleaved);
+
+    // Color primaries
+    auto primaries = mapColorPrimaries(image->colorPrimaries);
+    if (primaries) {
+        builder.setColorPrimaries(*primaries);
     }
 
-    // HDR flag
-    meta.isHDR = isHDRTransfer(image->transferCharacteristics) || image->depth > 8;
+    // White point (most CICP primaries use D65)
+    builder.setWhitePoint(WhitePoint::D65);
 
-    return meta;
+    // Matrix coefficients (identity after YUV→RGB conversion)
+    builder.setMatrixCoefficients(MatrixCoefficients::Identity);
+
+    // Transfer function
+    auto transfer = mapTransferFunction(image->transferCharacteristics);
+    if (transfer) {
+        builder.setTransferFunction(*transfer);
+    }
+
+    // Luminance reference
+    if (isHDRTransfer(image->transferCharacteristics)) {
+        builder.setLuminanceReference(LuminanceReference::HDR);
+    } else {
+        builder.setLuminanceReference(LuminanceReference::SDR);
+    }
+
+    // Alpha
+    if (image->alphaPlane != nullptr) {
+        builder.setAlphaMode(
+            alphaPremultiplied ? AlphaMode::Premultiplied : AlphaMode::Straight
+        );
+    } else {
+        builder.setAlphaMode(AlphaMode::None);
+    }
+
+    // HDR metadata
+    if (image->clli.maxCLL > 0) {
+        builder.setMaxCLL(static_cast<float>(image->clli.maxCLL));
+    }
+    if (image->clli.maxPALL > 0) {
+        builder.setMaxPALL(static_cast<float>(image->clli.maxPALL));
+    }
+
+    // Rendering intent (display-referred for decoded images)
+    builder.setImageDomain(ImageDomain::DisplayReferred);
+
+    return builder.build();
 }
+
+// ============================================================================
+// Main decode function
+// ============================================================================
 
 DecodeResult decode(
     uintptr_t inputPtr,
@@ -276,16 +201,11 @@ DecodeResult decode(
     int targetBitDepth,
     int maxThreads)
 {
-    double tStart = emscripten_get_now();
-    DecodeTimings timings;
     const uint8_t *avifData = reinterpret_cast<const uint8_t *>(inputPtr);
     DecodeResult result;
     result.dataPtr = 0;
     result.dataSize = 0;
-    result.width = 0;
-    result.height = 0;
-    result.depth = 8;
-    result.channels = 0;
+
     avifDecoder *decoder = avifDecoderCreate();
     if (!decoder)
     {
@@ -299,30 +219,23 @@ DecodeResult decode(
     decoder->ignoreExif = AVIF_TRUE;
     decoder->ignoreXMP = AVIF_TRUE;
 
-    double t0 = emscripten_get_now();
-    avifResult res = avifDecoderSetIOMemory(
-        decoder,
-        avifData,
-        inputSize);
-    timings.io = emscripten_get_now() - t0;
+    avifResult res = avifDecoderSetIOMemory(decoder, avifData, inputSize);
     if (res != AVIF_RESULT_OK)
     {
         result.error = std::string("IO error: ") + avifResultToString(res);
         avifDecoderDestroy(decoder);
         return result;
     }
-    t0 = emscripten_get_now();
+
     res = avifDecoderParse(decoder);
-    timings.parse = emscripten_get_now() - t0;
     if (res != AVIF_RESULT_OK)
     {
         result.error = std::string("Parse error: ") + avifResultToString(res);
         avifDecoderDestroy(decoder);
         return result;
     }
-    t0 = emscripten_get_now();
+
     res = avifDecoderNextImage(decoder);
-    timings.decode = emscripten_get_now() - t0;
     if (res != AVIF_RESULT_OK)
     {
         result.error = std::string("Decode error: ") + avifResultToString(res);
@@ -331,14 +244,10 @@ DecodeResult decode(
     }
 
     avifImage *image = decoder->image;
-    result.width = image->width;
-    result.height = image->height;
-    result.depth = image->depth;
 
     const uint8_t colorChannels = (image->yuvFormat == AVIF_PIXEL_FORMAT_YUV400) ? 1 : 3;
     const uint8_t alphaChannel = (image->alphaPlane != nullptr) ? 1 : 0;
-    result.channels = colorChannels + alphaChannel;
-    result.metadata = extractMetadata(image);
+    const uint32_t totalChannels = colorChannels + alphaChannel;
 
     // Convert to RGB(A)
     avifRGBImage rgb;
@@ -352,16 +261,15 @@ DecodeResult decode(
         outputDepth = 16;
 
     rgb.depth = outputDepth;
-    rgb.format = (result.channels == 4) ? AVIF_RGB_FORMAT_RGBA : (result.channels == 3) ? AVIF_RGB_FORMAT_RGB
-                                                                                        : AVIF_RGB_FORMAT_GRAY;
+    rgb.format = (totalChannels == 4) ? AVIF_RGB_FORMAT_RGBA
+               : (totalChannels == 3) ? AVIF_RGB_FORMAT_RGB
+                                      : AVIF_RGB_FORMAT_GRAY;
     rgb.alphaPremultiplied = AVIF_FALSE;
     rgb.isFloat = AVIF_FALSE;
 
     avifRGBImageAllocatePixels(&rgb);
 
-    t0 = emscripten_get_now();
     res = avifImageYUVToRGB(image, &rgb);
-    timings.yuvToRgb = emscripten_get_now() - t0;
     if (res != AVIF_RESULT_OK)
     {
         result.error = std::string("YUV to RGB error: ") + avifResultToString(res);
@@ -370,10 +278,9 @@ DecodeResult decode(
         return result;
     }
 
-    // Allocate memory for pixel data (caller must free via Module._free)
+    // Allocate output buffer (caller must free via Module._free)
     size_t dataSize = rgb.rowBytes * rgb.height;
     void *dataPtr = malloc(dataSize);
-    // uint8_t* dataPtr = static_cast<uint8_t*>(malloc(dataSize));
     if (!dataPtr)
     {
         result.error = "Failed to allocate output buffer";
@@ -381,127 +288,102 @@ DecodeResult decode(
         avifDecoderDestroy(decoder);
         return result;
     }
-    t0 = emscripten_get_now();
+
     std::memcpy(dataPtr, rgb.pixels, dataSize);
-    timings.memcpy = emscripten_get_now() - t0;
     result.dataPtr = reinterpret_cast<uintptr_t>(dataPtr);
     result.dataSize = dataSize;
-    result.depth = outputDepth;
+
+    // Build descriptor
+    result.descriptor = buildDescriptor(
+        image,
+        image->width,
+        image->height,
+        static_cast<uint32_t>(outputDepth),
+        totalChannels,
+        rgb.alphaPremultiplied == AVIF_TRUE
+    );
 
     avifRGBImageFreePixels(&rgb);
     avifDecoderDestroy(decoder);
-    timings.total = emscripten_get_now() - tStart;
-    result.timings = timings;
     return result;
 }
 
-ImageInfo getImageInfo(uintptr_t inputPtr, size_t inputSize)
+// ============================================================================
+// Get image info without full decode
+// ============================================================================
+
+ImageDescriptor getImageInfo(uintptr_t inputPtr, size_t inputSize)
 {
     const uint8_t *avifData = reinterpret_cast<const uint8_t *>(inputPtr);
-    ImageInfo info;
-    info.width = 0;
-    info.height = 0;
-    info.depth = 0;
-    info.channels = 0;
 
     avifDecoder *decoder = avifDecoderCreate();
     if (!decoder)
-        return info;
+    {
+        // Return minimal descriptor on error
+        ImageDescriptorBuilder builder;
+        builder.setGeometry(0, 0);
+        builder.setChannels(ChannelModel::RGB, 3);
+        builder.setNumeric(SampleType::Uint, DataType::Uint8, 8);
+        return builder.build();
+    }
 
     decoder->maxThreads = 1;
     decoder->strictFlags = AVIF_STRICT_DISABLED;
     decoder->ignoreExif = AVIF_TRUE;
     decoder->ignoreXMP = AVIF_TRUE;
 
-    avifResult res = avifDecoderSetIOMemory(
-        decoder,
-        avifData,
-        inputSize);
-
+    avifResult res = avifDecoderSetIOMemory(decoder, avifData, inputSize);
     if (res != AVIF_RESULT_OK)
     {
         avifDecoderDestroy(decoder);
-        return info;
+        ImageDescriptorBuilder builder;
+        builder.setGeometry(0, 0);
+        builder.setChannels(ChannelModel::RGB, 3);
+        builder.setNumeric(SampleType::Uint, DataType::Uint8, 8);
+        return builder.build();
     }
 
     res = avifDecoderParse(decoder);
     if (res != AVIF_RESULT_OK)
     {
         avifDecoderDestroy(decoder);
-        return info;
+        ImageDescriptorBuilder builder;
+        builder.setGeometry(0, 0);
+        builder.setChannels(ChannelModel::RGB, 3);
+        builder.setNumeric(SampleType::Uint, DataType::Uint8, 8);
+        return builder.build();
     }
 
     avifImage *image = decoder->image;
 
-    info.width = image->width;
-    info.height = image->height;
-    info.depth = image->depth;
-
     const uint8_t colorChannels = (image->yuvFormat == AVIF_PIXEL_FORMAT_YUV400) ? 1 : 3;
     const uint8_t alphaChannel = (image->alphaPlane != nullptr) ? 1 : 0;
-    info.channels = colorChannels + alphaChannel;
-    info.metadata = extractMetadata(image);
+    const uint32_t totalChannels = colorChannels + alphaChannel;
+
+    // Determine data type from source depth
+    DataType dataType = (image->depth > 8) ? DataType::Uint16 : DataType::Uint8;
+
+    ImageDescriptor descriptor = buildDescriptor(
+        image,
+        image->width,
+        image->height,
+        image->depth,
+        totalChannels,
+        false // no premultiplication info without decode
+    );
 
     avifDecoderDestroy(decoder);
-    return info;
+    return descriptor;
 }
 
 EMSCRIPTEN_BINDINGS(avif_decoder)
 {
-    // Mastering display metadata
-    value_object<MasteringDisplay>("MasteringDisplay")
-        .field("redX", &MasteringDisplay::redX)
-        .field("redY", &MasteringDisplay::redY)
-        .field("greenX", &MasteringDisplay::greenX)
-        .field("greenY", &MasteringDisplay::greenY)
-        .field("blueX", &MasteringDisplay::blueX)
-        .field("blueY", &MasteringDisplay::blueY)
-        .field("whiteX", &MasteringDisplay::whiteX)
-        .field("whiteY", &MasteringDisplay::whiteY)
-        .field("minLuminance", &MasteringDisplay::minLuminance)
-        .field("maxLuminance", &MasteringDisplay::maxLuminance)
-        .field("present", &MasteringDisplay::present);
-
-    // Image metadata
-    value_object<ImageMetadata>("ImageMetadata")
-        .field("colorPrimaries", &ImageMetadata::colorPrimaries)
-        .field("transferFunction", &ImageMetadata::transferFunction)
-        .field("matrixCoefficients", &ImageMetadata::matrixCoefficients)
-        .field("fullRange", &ImageMetadata::fullRange)
-        .field("maxCLL", &ImageMetadata::maxCLL)
-        .field("maxPALL", &ImageMetadata::maxPALL)
-        .field("masteringDisplay", &ImageMetadata::masteringDisplay)
-        .field("iccProfilePtr", &ImageMetadata::iccProfilePtr)
-        .field("iccProfileSize", &ImageMetadata::iccProfileSize)
-        .field("isHDR", &ImageMetadata::isHDR);
-
     // Decode result
     value_object<DecodeResult>("DecodeResult")
         .field("dataPtr", &DecodeResult::dataPtr)
         .field("dataSize", &DecodeResult::dataSize)
-        .field("width", &DecodeResult::width)
-        .field("height", &DecodeResult::height)
-        .field("depth", &DecodeResult::depth)
-        .field("channels", &DecodeResult::channels)
-        .field("metadata", &DecodeResult::metadata)
-        .field("timings", &DecodeResult::timings)
+        .field("descriptor", &DecodeResult::descriptor)
         .field("error", &DecodeResult::error);
-
-    // Image info (without pixel data)
-    value_object<ImageInfo>("ImageInfo")
-        .field("width", &ImageInfo::width)
-        .field("height", &ImageInfo::height)
-        .field("depth", &ImageInfo::depth)
-        .field("channels", &ImageInfo::channels)
-        .field("metadata", &ImageInfo::metadata);
-
-    value_object<DecodeTimings>("DecodeTimings")
-        .field("io", &DecodeTimings::io)
-        .field("parse", &DecodeTimings::parse)
-        .field("decode", &DecodeTimings::decode)
-        .field("yuvToRgb", &DecodeTimings::yuvToRgb)
-        .field("memcpy", &DecodeTimings::memcpy)
-        .field("total", &DecodeTimings::total);
 
     function("decode", &decode);
     function("getImageInfo", &getImageInfo);

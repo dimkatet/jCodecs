@@ -3,20 +3,13 @@ import {
   validateThreadCount,
   copyToWasm,
   copyFromWasmByType,
+  normalizeDescriptor,
 } from "@dimkatet/jcodecs-core";
+import type { ImageDescriptor } from "@dimkatet/jcodecs-core";
 import type { AVIFDecodeOptions } from "./options";
 import { DEFAULT_DECODE_OPTIONS } from "./options";
-import type {
-  AVIFImageData,
-  AVIFImageInfo,
-  AVIFDataType,
-} from "./types";
-import type { MainModule } from "./wasm/avif_dec";
-import {
-  isProfilingEnabled,
-  logDecodeProfile,
-} from "./profiling";
-import { convertMetadata } from "./metadata";
+import type { AVIFImageData, AVIFDataType } from "./types";
+import type { MainModule, DecodeResult } from "./wasm/avif_dec_mt";
 import { mtDecoderUrl, stDecoderUrl } from "./urls";
 
 type WasmModule = typeof import("./wasm/avif_dec_mt");
@@ -50,7 +43,6 @@ export async function init({ jsUrl, preferMT }: InitConfig = {}): Promise<void> 
 
   initPromise = (async () => {
     isMultiThreadedModule = jsUrl ? jsUrl.includes("_mt") : !!useMT;
-    // mainScriptUrlOrBlob needed for pthread workers to find the main JS file
     const moduleConfig: Record<string, unknown> = {
       mainScriptUrlOrBlob: isMultiThreadedModule ? url : undefined,
     };
@@ -73,7 +65,6 @@ export async function decode(
   config?: InitConfig,
 ): Promise<AVIFImageData> {
   await init(config);
-  const t0 = isProfilingEnabled() ? performance.now() : 0;
 
   const data = input instanceof ArrayBuffer ? new Uint8Array(input) : input;
   const opts = { ...DEFAULT_DECODE_OPTIONS, ...options };
@@ -92,62 +83,33 @@ export async function decode(
   opts.maxThreads = validation.validatedCount;
 
   // Copy input data to WASM heap
-  const t1 = isProfilingEnabled() ? performance.now() : 0;
   const inputPtr = copyToWasm(module, data);
-  const t2 = isProfilingEnabled() ? performance.now() : 0;
 
-  let result;
+  let result: DecodeResult;
   try {
     result = module.decode(inputPtr, data.length, opts.bitDepth, opts.maxThreads);
   } finally {
     module._free(inputPtr);
   }
-  const t3 = isProfilingEnabled() ? performance.now() : 0;
 
   if (result.error) {
     throw new Error(`AVIF decode error: ${result.error}`);
   }
 
-  const outputDepth = result.depth;
-  let outputDataType: AVIFDataType = 'uint8';
-  let bytesPerElement = 1;
-  if (outputDepth > 8) {
-    // Auto: use uint16 for >8 bit
-    outputDataType = "uint16";
-    bytesPerElement = 2;
-  }
+  const { dataPtr, dataSize } = result;
 
-  const elementCount = result.dataSize / bytesPerElement;
-  const pixelData = copyFromWasmByType(module, result.dataPtr, elementCount, outputDataType);
+  const descriptor = normalizeDescriptor(module, result.descriptor);
+  const dataType = descriptor.numeric.dataType as AVIFDataType;
 
-  module._free(result.dataPtr);
-  const t4 = isProfilingEnabled() ? performance.now() : 0;
-
-  const metadata = convertMetadata(result.metadata, module);
-  const t5 = isProfilingEnabled() ? performance.now() : 0;
-
-  if (isProfilingEnabled()) {
-    logDecodeProfile({
-      inputSize: data.length,
-      outputSize: result.dataSize,
-      dimensions: `${result.width}x${result.height}`,
-      bitDepth: outputDepth,
-      copyToWasm: t2 - t1,
-      wasmDecode: t3 - t2,
-      copyFromWasm: t4 - t3,
-      convertMetadata: t5 - t4,
-      total: t5 - t0,
-    });
-  }
+  // Copy pixel data from WASM heap
+  const bytesPerElement = dataType === 'uint16' ? 2 : 1;
+  const elementCount = dataSize / bytesPerElement;
+  const pixelData = copyFromWasmByType(module, dataPtr, elementCount, dataType);
+  module._free(dataPtr);
 
   return {
     data: pixelData,
-    dataType: outputDataType,
-    width: result.width,
-    height: result.height,
-    bitDepth: outputDepth,
-    channels: result.channels,
-    metadata,
+    descriptor,
   };
 }
 
@@ -160,13 +122,15 @@ export async function decodeToImageData(
 ): Promise<ImageData> {
   const result = await decode(input, { ...options, bitDepth: 8 });
 
-  const pixelCount = result.width * result.height;
+  const { width, height } = result.descriptor.geometry;
+  const channels = result.descriptor.channels.count;
+  const pixelCount = width * height;
   const rgbaData = new Uint8ClampedArray(pixelCount * 4);
 
-  if (result.channels === 4) {
+  if (channels === 4) {
     const src = result.data as Uint8Array;
     rgbaData.set(src);
-  } else {
+  } else if (channels === 3) {
     const rgb = result.data as Uint8Array;
     for (let i = 0, j = 0; i < rgb.length; i += 3, j += 4) {
       rgbaData[j] = rgb[i];
@@ -174,9 +138,17 @@ export async function decodeToImageData(
       rgbaData[j + 2] = rgb[i + 2];
       rgbaData[j + 3] = 255;
     }
+  } else if (channels === 1) {
+    const gray = result.data as Uint8Array;
+    for (let i = 0, j = 0; i < gray.length; i++, j += 4) {
+      rgbaData[j] = gray[i];
+      rgbaData[j + 1] = gray[i];
+      rgbaData[j + 2] = gray[i];
+      rgbaData[j + 3] = 255;
+    }
   }
 
-  return new ImageData(rgbaData, result.width, result.height);
+  return new ImageData(rgbaData, width, height);
 }
 
 /**
@@ -184,29 +156,23 @@ export async function decodeToImageData(
  */
 export async function getImageInfo(
   input: Uint8Array | ArrayBuffer,
-): Promise<AVIFImageInfo> {
+): Promise<ImageDescriptor> {
   await init();
 
   const data = input instanceof ArrayBuffer ? new Uint8Array(input) : input;
   const module = decoderModule!;
 
-  // Copy input data to WASM heap
   const inputPtr = copyToWasm(module, data);
 
-  let result;
+  let descriptor: ImageDescriptor;
   try {
-    result = module.getImageInfo(inputPtr, data.length);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    descriptor = normalizeDescriptor(module as any, module.getImageInfo(inputPtr, data.length) as any);
   } finally {
     module._free(inputPtr);
   }
 
-  return {
-    width: result.width,
-    height: result.height,
-    bitDepth: result.depth,
-    channels: result.channels,
-    metadata: convertMetadata(result.metadata, module),
-  };
+  return descriptor;
 }
 
 export function isInitialized(): boolean {
