@@ -1,15 +1,13 @@
 import {
   copyToWasm,
-  getExtendedImageData,
   isMultiThreadSupported,
   validateThreadCount,
 } from "@dimkatet/jcodecs-core";
-import { defaultMetadata } from "./metadata";
-import type { AVIFEncodeOptions, ChromaSubsampling } from "./options";
+import type { ChromaSubsampling } from "@dimkatet/jcodecs-core";
+import type { AVIFEncodeOptions } from "./options";
 import { DEFAULT_ENCODE_OPTIONS } from "./options";
-import { isProfilingEnabled, logEncodeProfile } from "./profiling";
-import type { AVIFEncodeInput } from "./types";
-import { validateDataType, validateDataTypeMatch } from "./validation";
+import type { AVIFEncodeDescriptor } from "./types";
+import { validateDescriptor, validateDataAgainstDescriptor } from "./validation";
 import type { EncodeOptions, MainModule } from "./wasm/avif_enc";
 import { mtEncoderUrl, stEncoderUrl } from "./urls";
 
@@ -23,7 +21,7 @@ let initPromise: Promise<void> | null = null;
 export interface InitConfig {
   /** URL to the encoder JS file (avif_enc.js). WASM is embedded. */
   jsUrl?: string;
-  /** Prefer to use of multi-threaded decoder */
+  /** Prefer to use of multi-threaded encoder */
   preferMT?: boolean;
 }
 
@@ -46,7 +44,6 @@ export async function init({
 
   initPromise = (async () => {
     isMultiThreadedModule = jsUrl ? jsUrl.includes("_mt") : !!useMT;
-    // mainScriptUrlOrBlob needed for pthread workers to find the main JS file
     const moduleConfig: Record<string, unknown> = {
       mainScriptUrlOrBlob: isMultiThreadedModule ? url : undefined,
     };
@@ -59,38 +56,75 @@ export async function init({
   await initPromise;
 }
 
+// ============================================================================
+// Descriptor → WASM mapping helpers
+// ============================================================================
+
 /**
- * Convert chroma subsampling string to number
+ * Convert ChromaSubsampling string to WASM numeric value
  */
 function chromaToNumber(chroma: ChromaSubsampling): number {
   switch (chroma) {
-    case "4:4:4":
-      return 444;
-    case "4:2:2":
-      return 422;
-    case "4:2:0":
-      return 420;
-    case "4:0:0":
-      return 400;
-    default:
-      return 420;
+    case "444": return 444;
+    case "422": return 422;
+    case "420": return 420;
+    case "400": return 400;
+    default: return 420;
   }
 }
 
 /**
- * Encode image data to AVIF format
+ * Map core ColorPrimaries to WASM colorSpace string.
+ * The C++ encoder only understands: "srgb", "display-p3", "rec2020"
+ */
+function mapPrimariesToColorSpace(primaries: string): string {
+  switch (primaries) {
+    case 'bt709': return 'srgb';
+    case 'displayP3': return 'display-p3';
+    case 'dciP3': return 'display-p3';
+    case 'bt2020': return 'rec2020';
+    default: return 'srgb';
+  }
+}
+
+/**
+ * Map core TransferFunction to WASM transferFunction string.
+ * The C++ encoder understands: "srgb", "pq", "hlg", "linear"
+ */
+function mapTransferFunction(tf: string): string {
+  switch (tf) {
+    case 'srgb': return 'srgb';
+    case 'pq': return 'pq';
+    case 'hlg': return 'hlg';
+    case 'linear': return 'linear';
+    case 'bt709': return 'srgb';
+    default: return 'srgb';
+  }
+}
+
+// ============================================================================
+// Public API
+// ============================================================================
+
+/**
+ * Encode pixel data to AVIF format.
+ *
+ * @param data - Raw pixel data
+ * @param descriptor - Image description (dimensions, color, format)
+ * @param options - Encoding parameters (quality, speed, etc.)
+ * @param config - WASM module initialization config
  */
 export async function encode(
-  encodeInput: AVIFEncodeInput,
+  data: Uint8Array | Uint16Array,
+  descriptor: AVIFEncodeDescriptor,
   options: AVIFEncodeOptions = {},
   config?: InitConfig,
 ): Promise<Uint8Array> {
   await init(config);
-  const t0 = isProfilingEnabled() ? performance.now() : 0;
-  const imageData =
-    encodeInput instanceof ImageData
-      ? getExtendedImageData(encodeInput, defaultMetadata)
-      : encodeInput;
+
+  // Validate descriptor and fill defaults
+  const desc = validateDescriptor(descriptor);
+  validateDataAgainstDescriptor(data, desc);
 
   const opts = { ...DEFAULT_ENCODE_OPTIONS, ...options };
   const module = encoderModule!;
@@ -107,44 +141,39 @@ export async function encode(
   }
   opts.maxThreads = validation.validatedCount;
 
-  validateDataType(imageData.dataType);
-  validateDataTypeMatch(imageData);
-
   // Copy input data to WASM heap
-  const t1 = isProfilingEnabled() ? performance.now() : 0;
-  const inputPtr = copyToWasm(module, imageData.data);
-  const inputSize = imageData.data.byteLength;
-  const t2 = isProfilingEnabled() ? performance.now() : 0;
+  const inputPtr = copyToWasm(module, data);
 
-  // Prepare WASM options
+  // Map descriptor + options → WASM EncodeOptions
   const wasmOptions: EncodeOptions = {
+    // From options (pure encoding params)
     quality: opts.quality,
     qualityAlpha: opts.qualityAlpha,
     speed: opts.speed,
     tune: opts.tune,
     lossless: opts.lossless,
-    chromaSubsampling: chromaToNumber(opts.chromaSubsampling),
-    bitDepth: opts.bitDepth,
-    colorSpace: opts.colorSpace,
-    transferFunction: opts.transferFunction,
     maxThreads: opts.maxThreads,
+    // From descriptor (image description)
+    chromaSubsampling: chromaToNumber(desc.sampling.chromaSubsampling!),
+    bitDepth: desc.numeric.bitDepth,
+    colorSpace: mapPrimariesToColorSpace(desc.color.primaries!),
+    transferFunction: mapTransferFunction(desc.transfer.function!),
   };
 
   let result;
   try {
     result = module.encode(
       inputPtr,
-      imageData.data.byteLength,
-      imageData.width,
-      imageData.height,
-      imageData.channels,
-      imageData.bitDepth,
+      data.byteLength,
+      desc.geometry.width,
+      desc.geometry.height,
+      desc.channels.count,
+      desc.numeric.bitDepth,
       wasmOptions,
     );
   } finally {
     module._free(inputPtr);
   }
-  const t3 = isProfilingEnabled() ? performance.now() : 0;
 
   if (result.error) {
     throw new Error(`AVIF encode error: ${result.error}`);
@@ -156,23 +185,7 @@ export async function encode(
     new Uint8Array(module.HEAPU8.buffer, result.dataPtr, result.dataSize),
   );
   module._free(result.dataPtr);
-  const t4 = isProfilingEnabled() ? performance.now() : 0;
 
-  if (isProfilingEnabled()) {
-    logEncodeProfile({
-      inputSize,
-      outputSize: result.dataSize,
-      dimensions: `${imageData.width}x${imageData.height}`,
-      inputBitDepth: imageData.bitDepth,
-      outputBitDepth: opts.bitDepth,
-      copyToWasm: t2 - t1,
-      wasmEncode: t3 - t2,
-      copyFromWasm: t4 - t3,
-      total: t4 - t0,
-    });
-  }
-
-  // Call progress callback if provided
   if (opts.onProgress) {
     opts.onProgress(1, "complete");
   }
@@ -181,13 +194,24 @@ export async function encode(
 }
 
 /**
- * Encode ImageData to AVIF with simple options
+ * Encode standard ImageData to AVIF with simple options.
+ * Convenience wrapper — constructs descriptor from ImageData.
  */
 export async function encodeSimple(
   imageData: ImageData,
   quality = 75,
 ): Promise<Uint8Array> {
-  return encode(imageData, { quality });
+  const data = new Uint8Array(
+    imageData.data.buffer,
+    imageData.data.byteOffset,
+    imageData.data.byteLength,
+  );
+  const descriptor: AVIFEncodeDescriptor = {
+    geometry: { width: imageData.width, height: imageData.height },
+    channels: { model: 'rgba', count: 4 },
+    numeric: { dataType: 'uint8', bitDepth: 8 },
+  };
+  return encode(data, descriptor, { quality });
 }
 
 /**

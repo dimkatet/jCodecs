@@ -1,6 +1,6 @@
 {
   "name": "@dimkatet/jcodecs-core",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Core utilities and types for jCodecs",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -12,21 +12,6 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
-    "./types": {
-      "types": "./dist/types.d.ts",
-      "import": "./dist/types.js",
-      "require": "./dist/types.cjs"
-    },
-    "./memory": {
-      "types": "./dist/memory.d.ts",
-      "import": "./dist/memory.js",
-      "require": "./dist/memory.cjs"
-    },
-    "./worker-pool": {
-      "types": "./dist/worker-pool.d.ts",
-      "import": "./dist/worker-pool.js",
-      "require": "./dist/worker-pool.cjs"
-    },
     "./codec-worker": {
       "types": "./dist/codec-worker.d.ts",
       "import": "./dist/codec-worker.js",
@@ -36,16 +21,6 @@
       "types": "./dist/codec-worker-client.d.ts",
       "import": "./dist/codec-worker-client.js",
       "require": "./dist/codec-worker-client.cjs"
-    },
-    "./threading": {
-      "types": "./dist/threading.d.ts",
-      "import": "./dist/threading.js",
-      "require": "./dist/threading.cjs"
-    },
-    "./wasm-utils": {
-      "types": "./dist/wasm-utils.d.ts",
-      "import": "./dist/wasm-utils.js",
-      "require": "./dist/wasm-utils.cjs"
     }
   },
   "files": [
@@ -54,6 +29,7 @@
   "sideEffects": false,
   "scripts": {
     "build": "pnpm build:ts",
+    "build:wasm": "docker build --target core --output type=local,dest=src/wasm/descriptor -f ../../Dockerfile ../..",
     "build:ts": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",

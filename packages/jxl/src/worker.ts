@@ -5,7 +5,7 @@ import { createCodecWorker } from "@dimkatet/jcodecs-core/codec-worker";
 import { encode, init as initEncoder } from "./encode";
 import { decode, init as initDecoder } from "./decode";
 import { JXLDecodeOptions, JXLEncodeOptions } from "./options";
-import { JXLImageData } from "./types";
+import type { JXLEncodeDescriptor } from "./types";
 
 export interface WorkerInitPayload {
   /** Custom URL for decoder JS (WASM is embedded) */
@@ -34,15 +34,14 @@ const handlers = {
     }
   },
   encode: (payload: {
-    imageData: JXLImageData;
+    data: Uint8Array | Uint16Array | Float16Array | Float32Array;
+    descriptor: JXLEncodeDescriptor;
     options?: JXLEncodeOptions;
   }) => {
     if (type === "decoder") {
       throw new Error("JXL encoder module is not initialized");
     }
-    const { imageData, options } = payload;
-
-    return encode(imageData, options, { jsUrl: encoderUrl });
+    return encode(payload.data, payload.descriptor, payload.options, { jsUrl: encoderUrl });
   },
   decode: (payload: { data: Uint8Array; options?: JXLDecodeOptions }) => {
     if (type === "encoder") {

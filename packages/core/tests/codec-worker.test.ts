@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createCodecWorker } from '../src/codec-worker';
+import { createCodecWorker } from '../src/worker';
 
 // Mock Worker context (self)
 function createMockWorkerContext() {

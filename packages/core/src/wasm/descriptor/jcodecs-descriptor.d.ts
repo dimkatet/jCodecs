@@ -1,24 +1,5 @@
 // TypeScript bindings for emscripten-generated code.  Automatically generated at compile time.
-declare namespace RuntimeExports {
-    /**
-     * @param {string|null=} returnType
-     * @param {Array=} argTypes
-     * @param {Array=} args
-     * @param {Object=} opts
-     */
-    function ccall(ident: any, returnType?: (string | null) | undefined, argTypes?: any[] | undefined, args?: any[] | undefined, opts?: any | undefined): any;
-    /**
-     * @param {string=} returnType
-     * @param {Array=} argTypes
-     * @param {Object=} opts
-     */
-    function cwrap(ident: any, returnType?: string | undefined, argTypes?: any[] | undefined, opts?: any | undefined): any;
-    let HEAPU8: any;
-    let HEAPU16: any;
-}
 interface WasmModule {
-  _malloc(_0: number): number;
-  _free(_0: number): void;
 }
 
 type EmbindString = ArrayBuffer|Uint8Array|Uint8ClampedArray|Int8Array|string;
@@ -301,15 +282,7 @@ export type ImageDescriptor = {
   iccProfile?: VectorUint8 | undefined
 };
 
-export type DecodeResult = {
-  dataPtr: number,
-  dataSize: number,
-  descriptor: ImageDescriptor,
-  error: EmbindString
-};
-
 interface EmbindModule {
-  MAX_THREADS: number;
   SampleLayout: {interleaved: SampleLayoutValue<0>, planar: SampleLayoutValue<1>, semiPlanar: SampleLayoutValue<2>};
   ChromaSubsampling: {444: ChromaSubsamplingValue<0>, 422: ChromaSubsamplingValue<1>, 420: ChromaSubsamplingValue<2>, 400: ChromaSubsamplingValue<3>};
   ChromaSamplePosition: {centered: ChromaSamplePositionValue<0>, cosited: ChromaSamplePositionValue<1>, vertical: ChromaSamplePositionValue<2>, topleft: ChromaSamplePositionValue<3>};
@@ -339,13 +312,11 @@ interface EmbindModule {
   VectorUint8: {
     new(): VectorUint8;
   };
-  decode(_0: number, _1: number, _2: number, _3: number): DecodeResult;
-  getImageInfo(_0: number, _1: number): ImageDescriptor;
   createSDRDescriptor(_0: number, _1: number, _2: ChannelModel, _3: DataType, _4: number): ImageDescriptor;
   createHDRDescriptor(_0: number, _1: number, _2: ChannelModel, _3: DataType, _4: number, _5: ColorPrimaries, _6: TransferFunction): ImageDescriptor;
   isValidDescriptor(_0: ImageDescriptor): boolean;
   areDescriptorsCompatible(_0: ImageDescriptor, _1: ImageDescriptor): boolean;
 }
 
-export type MainModule = WasmModule & typeof RuntimeExports & EmbindModule;
+export type MainModule = WasmModule & EmbindModule;
 export default function MainModuleFactory (options?: unknown): Promise<MainModule>;

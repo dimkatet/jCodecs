@@ -21,6 +21,10 @@ set(LIBAVIF_INCLUDE "" CACHE PATH "Path to libavif includes")
 set(DAV1D_INCLUDE "" CACHE PATH "Path to dav1d includes")
 set(AOM_INCLUDE "" CACHE PATH "Path to aom includes")
 
+# jCodecs core library (ImageDescriptor)
+set(JCODECS_CORE_LIB "" CACHE PATH "Path to libjcodecs_core.a")
+set(JCODECS_CORE_INCLUDE "" CACHE PATH "Path to jcodecs core includes")
+
 # Common Emscripten flags
 set(COMMON_LINK_FLAGS
     "-s WASM=1"
@@ -60,10 +64,11 @@ function(add_optional_libyuv target)
 endfunction()
 
 # --- Decoder (single-threaded) ---
-add_executable(avif_dec avif_dec.cpp)
+add_executable(avif_dec avif_dec.cpp ${JCODECS_CORE_INCLUDE}/descriptor-embind.cpp)
 target_include_directories(avif_dec PRIVATE
     ${LIBAVIF_INCLUDE}
     ${DAV1D_INCLUDE}
+    ${JCODECS_CORE_INCLUDE}
 )
 target_compile_options(avif_dec PRIVATE -O3 -flto -msimd128)
 set_target_properties(avif_dec PROPERTIES
@@ -73,15 +78,17 @@ set_target_properties(avif_dec PROPERTIES
 target_link_libraries(avif_dec
     ${LIBAVIF_DEC_LIB}
     ${DAV1D_LIB}
+    ${JCODECS_CORE_LIB}
 )
 add_optional_libyuv(avif_dec)
 
 # --- Decoder (multi-threaded) ---
 if(BUILD_MT)
-    add_executable(avif_dec_mt avif_dec.cpp)
+    add_executable(avif_dec_mt avif_dec.cpp ${JCODECS_CORE_INCLUDE}/descriptor-embind.cpp)
     target_include_directories(avif_dec_mt PRIVATE
         ${LIBAVIF_INCLUDE}
         ${DAV1D_INCLUDE}
+        ${JCODECS_CORE_INCLUDE}
     )
     target_compile_options(avif_dec_mt PRIVATE -O3 -flto -pthread)
     target_compile_definitions(avif_dec_mt PRIVATE MAX_THREADS=${MAX_THREADS})
@@ -92,6 +99,7 @@ if(BUILD_MT)
     target_link_libraries(avif_dec_mt
         ${LIBAVIF_DEC_LIB}
         ${DAV1D_LIB}
+        ${JCODECS_CORE_LIB}
     )
     add_optional_libyuv(avif_dec_mt)
 endif()

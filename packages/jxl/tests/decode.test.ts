@@ -2,22 +2,21 @@
  * Browser tests for JXL decoder
  *
  * These tests run in a real browser environment using Playwright.
- * They test the full WASM integration including decode operations and metadata extraction.
+ * They test the full WASM integration including decode operations and descriptor extraction.
  */
 
 import { describe, it, expect, beforeAll } from "vitest";
 import {
   decode,
   encode,
+  encodeSimple,
   getImageInfo,
   initDecoder,
   initEncoder,
 } from "@dimkatet/jcodecs-jxl";
-import type { JXLImageData, JXLImageInfo } from "@dimkatet/jcodecs-jxl";
+import type { JXLImageData, JXLEncodeDescriptor } from "@dimkatet/jcodecs-jxl";
+import type { ImageDescriptor } from "@dimkatet/jcodecs-jxl";
 
-/**
- * Load a test fixture file
- */
 async function loadFixture(filename: string): Promise<Uint8Array> {
   const response = await fetch(`/${filename}`);
   if (!response.ok) {
@@ -27,31 +26,73 @@ async function loadFixture(filename: string): Promise<Uint8Array> {
   return new Uint8Array(buffer);
 }
 
-/**
- * Create a test ImageData for encoding
- */
-function createTestImageData(
-  width: number,
-  height: number,
-  hasAlpha = true
-): ImageData {
-  const channels = hasAlpha ? 4 : 4;
-  const data = new Uint8ClampedArray(width * height * channels);
-
+function createTestImageData(width: number, height: number): ImageData {
+  const data = new Uint8ClampedArray(width * height * 4);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      const i = (y * width + x) * channels;
+      const i = (y * width + x) * 4;
       data[i] = Math.floor((x / width) * 255);
       data[i + 1] = Math.floor((y / height) * 255);
       data[i + 2] = 128;
-      data[i + 3] = hasAlpha ? 255 : 255;
+      data[i + 3] = 255;
     }
   }
-
   return new ImageData(data, width, height);
 }
 
-describe.skip("JXL Decoder", () => {
+function createTestPixelData8(
+  width: number,
+  height: number,
+  primaries: 'bt709' | 'displayP3' | 'bt2020' = 'bt709',
+): { data: Uint8Array; descriptor: JXLEncodeDescriptor } {
+  const data = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      data[i] = Math.floor((x / width) * 255);
+      data[i + 1] = Math.floor((y / height) * 255);
+      data[i + 2] = 128;
+      data[i + 3] = 255;
+    }
+  }
+  return {
+    data,
+    descriptor: {
+      geometry: { width, height },
+      channels: { model: 'rgba', count: 4 },
+      numeric: { dataType: 'uint8', bitDepth: 8 },
+      color: { primaries },
+    },
+  };
+}
+
+function createTestPixelData16(
+  width: number,
+  height: number,
+  bitDepth: 10 | 12 = 10,
+): { data: Uint16Array; descriptor: JXLEncodeDescriptor } {
+  const maxVal = (1 << bitDepth) - 1;
+  const data = new Uint16Array(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      data[i] = Math.floor((x / width) * maxVal);
+      data[i + 1] = Math.floor((y / height) * maxVal);
+      data[i + 2] = Math.floor(maxVal / 2);
+      data[i + 3] = maxVal;
+    }
+  }
+  return {
+    data,
+    descriptor: {
+      geometry: { width, height },
+      channels: { model: 'rgba', count: 4 },
+      numeric: { dataType: 'uint16', bitDepth },
+    },
+  };
+}
+
+describe("JXL Decoder", () => {
   beforeAll(async () => {
     await initDecoder();
     await initEncoder();
@@ -60,7 +101,7 @@ describe.skip("JXL Decoder", () => {
   describe("real test files from libjxl/testdata", () => {
     describe("pq_gradient.jxl (HDR PQ gradient)", () => {
       let result: JXLImageData;
-      let info: JXLImageInfo;
+      let info: ImageDescriptor;
 
       beforeAll(async () => {
         const data = await loadFixture("pq_gradient.jxl");
@@ -74,36 +115,34 @@ describe.skip("JXL Decoder", () => {
       });
 
       it("should have correct dimensions", () => {
-        expect(result.width).toBeGreaterThan(0);
-        expect(result.height).toBeGreaterThan(0);
+        expect(result.descriptor.geometry.width).toBeGreaterThan(0);
+        expect(result.descriptor.geometry.height).toBeGreaterThan(0);
       });
 
       it("should be HDR with PQ transfer", () => {
-        expect(result.metadata.transferFunction).toBe("pq");
-        expect(result.metadata.isHDR).toBe(true);
+        expect(result.descriptor.transfer?.function).toBe("pq");
       });
 
       it("should have high bit depth", () => {
-        expect(result.bitDepth).toBeGreaterThanOrEqual(10);
+        expect(result.descriptor.numeric.bitDepth).toBeGreaterThanOrEqual(10);
       });
 
       it("should use Uint16Array for high bit depth", () => {
         expect(result.data).toBeInstanceOf(Uint16Array);
-        expect(result.dataType).toBe("uint16");
+        expect(result.descriptor.numeric.dataType).toBe("uint16");
       });
 
       it("getImageInfo should match decode result", () => {
-        expect(info.width).toBe(result.width);
-        expect(info.height).toBe(result.height);
-        expect(info.bitDepth).toBe(result.bitDepth);
-        expect(info.metadata.transferFunction).toBe(result.metadata.transferFunction);
-        expect(info.metadata.isHDR).toBe(result.metadata.isHDR);
+        expect(info.geometry.width).toBe(result.descriptor.geometry.width);
+        expect(info.geometry.height).toBe(result.descriptor.geometry.height);
+        expect(info.numeric.bitDepth).toBe(result.descriptor.numeric.bitDepth);
+        expect(info.transfer?.function).toBe(result.descriptor.transfer?.function);
       });
     });
 
     describe("splines.jxl (JXL spline feature test)", () => {
       let result: JXLImageData;
-      let info: JXLImageInfo;
+      let info: ImageDescriptor;
 
       beforeAll(async () => {
         const data = await loadFixture("splines.jxl");
@@ -117,20 +156,19 @@ describe.skip("JXL Decoder", () => {
       });
 
       it("should have valid dimensions", () => {
-        expect(result.width).toBeGreaterThan(0);
-        expect(result.height).toBeGreaterThan(0);
+        expect(result.descriptor.geometry.width).toBeGreaterThan(0);
+        expect(result.descriptor.geometry.height).toBeGreaterThan(0);
       });
 
-      it("should have metadata", () => {
-        expect(result.metadata).toBeDefined();
-        expect(result.metadata.colorPrimaries).toBeDefined();
-        expect(result.metadata.transferFunction).toBeDefined();
+      it("should have color and transfer info", () => {
+        expect(result.descriptor.color?.primaries).toBeDefined();
+        expect(result.descriptor.transfer?.function).toBeDefined();
       });
 
       it("getImageInfo should match decode result", () => {
-        expect(info.width).toBe(result.width);
-        expect(info.height).toBe(result.height);
-        expect(info.bitDepth).toBe(result.bitDepth);
+        expect(info.geometry.width).toBe(result.descriptor.geometry.width);
+        expect(info.geometry.height).toBe(result.descriptor.geometry.height);
+        expect(info.numeric.bitDepth).toBe(result.descriptor.numeric.bitDepth);
       });
     });
   });
@@ -138,223 +176,200 @@ describe.skip("JXL Decoder", () => {
   describe("basic decoding", () => {
     it("should decode 8-bit sRGB image", async () => {
       const imageData = createTestImageData(64, 64);
-      const encoded = await encode(imageData, { bitDepth: 8 });
+      const encoded = await encodeSimple(imageData);
       const result = await decode(encoded);
 
       expect(result).toBeDefined();
       expect(result.data).toBeInstanceOf(Uint8Array);
       expect(result.data.length).toBeGreaterThan(0);
-      expect(result.width).toBe(64);
-      expect(result.height).toBe(64);
-      expect(result.bitDepth).toBe(8);
-      expect(result.dataType).toBe("uint8");
+      expect(result.descriptor.geometry.width).toBe(64);
+      expect(result.descriptor.geometry.height).toBe(64);
+      expect(result.descriptor.numeric.bitDepth).toBe(8);
+      expect(result.descriptor.numeric.dataType).toBe("uint8");
     });
 
     it("should decode 10-bit image", async () => {
-      const imageData = createTestImageData(32, 32);
-      const encoded = await encode(imageData, { bitDepth: 10 });
+      const { data, descriptor } = createTestPixelData16(32, 32, 10);
+      const encoded = await encode(data, descriptor);
       const result = await decode(encoded);
 
-      expect(result).toBeDefined();
       expect(result.data).toBeInstanceOf(Uint16Array);
-      expect(result.bitDepth).toBe(10);
-      expect(result.dataType).toBe("uint16");
+      expect(result.descriptor.numeric.bitDepth).toBe(10);
+      expect(result.descriptor.numeric.dataType).toBe("uint16");
     });
 
     it("should decode 12-bit image", async () => {
-      const imageData = createTestImageData(32, 32);
-      const encoded = await encode(imageData, { bitDepth: 12 });
+      const { data, descriptor } = createTestPixelData16(32, 32, 12);
+      const encoded = await encode(data, descriptor);
       const result = await decode(encoded);
 
-      expect(result).toBeDefined();
       expect(result.data).toBeInstanceOf(Uint16Array);
-      expect(result.bitDepth).toBe(12);
-      expect(result.dataType).toBe("uint16");
+      expect(result.descriptor.numeric.bitDepth).toBe(12);
+      expect(result.descriptor.numeric.dataType).toBe("uint16");
     });
 
     it("should preserve image dimensions", async () => {
       const width = 48;
       const height = 32;
       const imageData = createTestImageData(width, height);
-      const encoded = await encode(imageData);
+      const encoded = await encodeSimple(imageData);
       const result = await decode(encoded);
 
-      expect(result.width).toBe(width);
-      expect(result.height).toBe(height);
+      expect(result.descriptor.geometry.width).toBe(width);
+      expect(result.descriptor.geometry.height).toBe(height);
     });
   });
 
-  describe("metadata extraction", () => {
-    it("should extract sRGB metadata", async () => {
+  describe("color and transfer metadata", () => {
+    it("should extract sRGB color info (bt709/sRGB)", async () => {
       const imageData = createTestImageData(32, 32);
-      const encoded = await encode(imageData, { colorSpace: "srgb" });
+      const encoded = await encodeSimple(imageData);
       const result = await decode(encoded);
 
-      expect(result.metadata.colorPrimaries).toBe("bt709");
-      expect(result.metadata.transferFunction).toBe("srgb");
-      expect(result.metadata.matrixCoefficients).toBe("identity");
-      expect(result.metadata.isHDR).toBe(false);
+      expect(result.descriptor.color?.primaries).toBe("bt709");
+      expect(result.descriptor.transfer?.function).toBe("srgb");
     });
 
-    it("should extract Display P3 metadata", async () => {
-      const imageData = createTestImageData(32, 32);
-      const encoded = await encode(imageData, { colorSpace: "display-p3" });
+    it("should extract Display P3 color primaries", async () => {
+      const { data, descriptor } = createTestPixelData8(32, 32, 'displayP3');
+      const encoded = await encode(data, descriptor);
       const result = await decode(encoded);
 
-      expect(result.metadata.colorPrimaries).toBe("display-p3");
+      expect(result.descriptor.color?.primaries).toBe("displayP3");
     });
 
-    it("should extract Rec.2020 metadata", async () => {
-      const imageData = createTestImageData(32, 32);
-      const encoded = await encode(imageData, { colorSpace: "rec2020" });
+    it("should extract Rec.2020 color primaries", async () => {
+      const { data, descriptor } = createTestPixelData8(32, 32, 'bt2020');
+      const encoded = await encode(data, descriptor);
       const result = await decode(encoded);
 
-      expect(result.metadata.colorPrimaries).toBe("bt2020");
+      expect(result.descriptor.color?.primaries).toBe("bt2020");
     });
 
     it("should detect HDR with PQ transfer", async () => {
-      const imageData = createTestImageData(32, 32);
-      const encoded = await encode(imageData, {
-        colorSpace: "rec2020",
-        transferFunction: "pq",
-        bitDepth: 10,
+      const { data, descriptor } = createTestPixelData16(32, 32, 10);
+      const encoded = await encode(data, {
+        ...descriptor,
+        color: { primaries: 'bt2020' },
+        transfer: { function: 'pq' },
       });
       const result = await decode(encoded);
 
-      expect(result.metadata.transferFunction).toBe("pq");
-      expect(result.metadata.isHDR).toBe(true);
+      expect(result.descriptor.transfer?.function).toBe("pq");
     });
 
     it("should detect HDR with HLG transfer", async () => {
-      const imageData = createTestImageData(32, 32);
-      const encoded = await encode(imageData, {
-        colorSpace: "rec2020",
-        transferFunction: "hlg",
-        bitDepth: 10,
+      const { data, descriptor } = createTestPixelData16(32, 32, 10);
+      const encoded = await encode(data, {
+        ...descriptor,
+        color: { primaries: 'bt2020' },
+        transfer: { function: 'hlg' },
       });
       const result = await decode(encoded);
 
-      expect(result.metadata.transferFunction).toBe("hlg");
-      expect(result.metadata.isHDR).toBe(true);
+      expect(result.descriptor.transfer?.function).toBe("hlg");
+    });
+  });
+
+  describe("bitDepth option", () => {
+    it("should force 8-bit output when bitDepth: 8", async () => {
+      const { data, descriptor } = createTestPixelData16(32, 32, 10);
+      const encoded = await encode(data, descriptor);
+      const result = await decode(encoded, { bitDepth: 8 });
+
+      expect(result.descriptor.numeric.bitDepth).toBe(8);
+      expect(result.descriptor.numeric.dataType).toBe("uint8");
+      expect(result.data).toBeInstanceOf(Uint8Array);
     });
 
-    it("should have animation metadata", async () => {
-      const imageData = createTestImageData(16, 16);
-      const encoded = await encode(imageData);
-      const result = await decode(encoded);
+    it("should preserve HDR color info when downsampling to 8-bit", async () => {
+      const { data, descriptor } = createTestPixelData16(32, 32, 10);
+      const encoded = await encode(data, {
+        ...descriptor,
+        color: { primaries: 'bt2020' },
+        transfer: { function: 'pq' },
+      });
+      const result = await decode(encoded, { bitDepth: 8 });
 
-      expect(result.metadata.isAnimated).toBe(false);
-      expect(result.metadata.frameCount).toBe(1);
+      expect(result.descriptor.color?.primaries).toBe("bt2020");
+      expect(result.descriptor.transfer?.function).toBe("pq");
+    });
+
+    it("should auto-detect bitDepth when set to 0 (default)", async () => {
+      const { data, descriptor } = createTestPixelData16(32, 32, 10);
+      const encoded = await encode(data, descriptor);
+      const result = await decode(encoded, { bitDepth: 0 });
+
+      expect(result.descriptor.numeric.bitDepth).toBe(10);
+      expect(result.descriptor.numeric.dataType).toBe("uint16");
     });
   });
 
   describe("getImageInfo", () => {
     it("should get image info without full decode", async () => {
       const imageData = createTestImageData(64, 48);
-      const encoded = await encode(imageData, { bitDepth: 10 });
+      const encoded = await encodeSimple(imageData);
       const info = await getImageInfo(encoded);
 
-      expect(info.width).toBe(64);
-      expect(info.height).toBe(48);
-      expect(info.bitDepth).toBe(10);
-      expect(info.channels).toBeGreaterThan(0);
-      expect(info.metadata).toBeDefined();
+      expect(info.geometry.width).toBe(64);
+      expect(info.geometry.height).toBe(48);
+      expect(info.numeric.bitDepth).toBe(8);
+      expect(info.channels.count).toBeGreaterThan(0);
     });
 
-    it("should match full decode metadata", async () => {
-      const imageData = createTestImageData(32, 32);
-      const encoded = await encode(imageData, {
-        colorSpace: "display-p3",
-        bitDepth: 10,
-      });
+    it("should match full decode descriptor", async () => {
+      const { data, descriptor } = createTestPixelData8(32, 32, 'displayP3');
+      const encoded = await encode(data, descriptor);
 
       const info = await getImageInfo(encoded);
       const result = await decode(encoded);
 
-      expect(info.width).toBe(result.width);
-      expect(info.height).toBe(result.height);
-      expect(info.bitDepth).toBe(result.bitDepth);
-      expect(info.channels).toBe(result.channels);
-      expect(info.metadata.colorPrimaries).toBe(result.metadata.colorPrimaries);
-      expect(info.metadata.transferFunction).toBe(result.metadata.transferFunction);
-      expect(info.metadata.isHDR).toBe(result.metadata.isHDR);
+      expect(info.geometry.width).toBe(result.descriptor.geometry.width);
+      expect(info.geometry.height).toBe(result.descriptor.geometry.height);
+      expect(info.numeric.bitDepth).toBe(result.descriptor.numeric.bitDepth);
+      expect(info.channels.count).toBe(result.descriptor.channels.count);
+      expect(info.color?.primaries).toBe(result.descriptor.color?.primaries);
+      expect(info.transfer?.function).toBe(result.descriptor.transfer?.function);
     });
   });
 
-  describe("dataType handling", () => {
-    it("should auto-determine dataType based on bitDepth", async () => {
-      const imageData8 = createTestImageData(16, 16);
-      const encoded8 = await encode(imageData8, { bitDepth: 8 });
-      const result8 = await decode(encoded8);
+  describe("pixel data integrity", () => {
+    it("should have correct pixel count", async () => {
+      const imageData = createTestImageData(32, 32);
+      const encoded = await encodeSimple(imageData);
+      const result = await decode(encoded);
 
-      expect(result8.dataType).toBe("uint8");
-      expect(result8.data).toBeInstanceOf(Uint8Array);
-
-      const imageData10 = createTestImageData(16, 16);
-      const encoded10 = await encode(imageData10, { bitDepth: 10 });
-      const result10 = await decode(encoded10);
-
-      expect(result10.dataType).toBe("uint16");
-      expect(result10.data).toBeInstanceOf(Uint16Array);
-    });
-
-    it("should respect explicit dataType option", async () => {
-      const imageData = createTestImageData(16, 16);
-      const encoded = await encode(imageData, { bitDepth: 8 });
-
-      const result = await decode(encoded, { dataType: "uint8" });
-      expect(result.dataType).toBe("uint8");
-      expect(result.data).toBeInstanceOf(Uint8Array);
-    });
-
-    it("should handle uint16 dataType for 10-bit", async () => {
-      const imageData = createTestImageData(16, 16);
-      const encoded = await encode(imageData, { bitDepth: 10 });
-
-      const result = await decode(encoded, { dataType: "uint16" });
-      expect(result.dataType).toBe("uint16");
-      expect(result.data).toBeInstanceOf(Uint16Array);
-    });
-  });
-
-  describe.skip("bitDepth conversion", () => {
-    it("should convert to specified bitDepth", async () => {
-      const imageData = createTestImageData(16, 16);
-      const encoded = await encode(imageData, { bitDepth: 10 });
-
-      const result8 = await decode(encoded, { bitDepth: 8 });
-      expect(result8.bitDepth).toBe(8);
-      expect(result8.dataType).toBe("uint8");
-
-      const result10 = await decode(encoded, { bitDepth: 10 });
-      expect(result10.bitDepth).toBe(10);
-      expect(result10.dataType).toBe("uint16");
-    });
-
-    it("should auto-detect bitDepth when set to 0", async () => {
-      const imageData = createTestImageData(16, 16);
-      const encoded = await encode(imageData, { bitDepth: 12 });
-
-      const result = await decode(encoded, { bitDepth: 0 });
-      expect(result.bitDepth).toBe(12);
+      const { width, height } = result.descriptor.geometry;
+      const channels = result.descriptor.channels.count;
+      expect(result.data.length).toBe(width * height * channels);
     });
   });
 
   describe("lossless round-trip", () => {
     it("should preserve exact pixels in lossless mode", async () => {
       const imageData = createTestImageData(8, 8);
-      const encoded = await encode(imageData, { lossless: true });
+      const data = new Uint8Array(
+        imageData.data.buffer,
+        imageData.data.byteOffset,
+        imageData.data.byteLength,
+      );
+      const descriptor: JXLEncodeDescriptor = {
+        geometry: { width: 8, height: 8 },
+        channels: { model: 'rgba', count: 4 },
+        numeric: { dataType: 'uint8', bitDepth: 8 },
+      };
+      const encoded = await encode(data, descriptor, { lossless: true });
       const decoded = await decode(encoded);
 
-      expect(decoded.width).toBe(8);
-      expect(decoded.height).toBe(8);
+      expect(decoded.descriptor.geometry.width).toBe(8);
+      expect(decoded.descriptor.geometry.height).toBe(8);
 
       // Check center pixel
-      const centerIdx = (4 * 8 + 4) * decoded.channels;
+      const channels = decoded.descriptor.channels.count;
+      const centerIdx = (4 * 8 + 4) * channels;
       const srcData = imageData.data;
       const dstData = decoded.data as Uint8Array;
 
-      // For lossless, colors should be very close (allow small difference for format conversion)
       expect(Math.abs(dstData[centerIdx] - srcData[(4 * 8 + 4) * 4])).toBeLessThan(2);
     });
   });
@@ -372,33 +387,14 @@ describe.skip("JXL Decoder", () => {
   });
 
   describe("channels", () => {
-    it("should decode RGB images (3 channels)", async () => {
+    it("should decode RGBA images (3-4 channels)", async () => {
       const imageData = createTestImageData(16, 16);
-      const encoded = await encode(imageData);
+      const encoded = await encodeSimple(imageData);
       const result = await decode(encoded);
 
       // JXL can have 3 or 4 channels depending on encoding
-      expect(result.channels).toBeGreaterThanOrEqual(3);
-      expect(result.channels).toBeLessThanOrEqual(4);
-    });
-
-    it("should decode RGBA images (4 channels)", async () => {
-      const imageData = createTestImageData(16, 16, true);
-      const encoded = await encode(imageData);
-      const result = await decode(encoded);
-
-      expect(result.channels).toBeGreaterThanOrEqual(3);
-    });
-  });
-
-  describe("matrix coefficients", () => {
-    it("should always have identity matrix (JXL decodes to RGB)", async () => {
-      const imageData = createTestImageData(16, 16);
-      const encoded = await encode(imageData);
-      const result = await decode(encoded);
-
-      // JXL always decodes to RGB, so matrix is identity
-      expect(result.metadata.matrixCoefficients).toBe("identity");
+      expect(result.descriptor.channels.count).toBeGreaterThanOrEqual(3);
+      expect(result.descriptor.channels.count).toBeLessThanOrEqual(4);
     });
   });
 });

@@ -1,6 +1,6 @@
 {
   "name": "@dimkatet/jcodecs-avif",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "AVIF encoder/decoder using libavif compiled to WebAssembly",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -53,7 +53,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@dimkatet/jcodecs-core": "workspace:*"
+    "@dimkatet/jcodecs-core": "workspace:*",
+    "valibot": "^1.2.0"
   },
   "devDependencies": {
     "@types/emscripten": "^1.39.10",

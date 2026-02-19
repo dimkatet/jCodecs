@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { CodecWorkerClient } from '../src/codec-worker-client';
+import { CodecWorkerClient } from '../src/worker';
 
 // Create mock pool instance
 function createMockPool() {
@@ -18,7 +18,7 @@ function createMockPool() {
 
 // Mock WorkerPool class
 const mockPoolInstances: ReturnType<typeof createMockPool>[] = [];
-vi.mock('../src/worker-pool', () => {
+vi.mock('../src/worker/pool', () => {
   return {
     WorkerPool: class MockWorkerPool {
       factory: () => Worker;
@@ -206,7 +206,7 @@ describe('CodecWorkerClient', () => {
 
   it('worker factory sends init message with payload', async () => {
     const client = new CodecWorkerClient();
-    const { WorkerPool } = await import('../src/worker-pool');
+    const { WorkerPool } = await import('../src/worker');
 
     await client.init({
       workerUrl: '/worker.js',

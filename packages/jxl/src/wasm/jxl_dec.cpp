@@ -10,7 +10,10 @@
 #include <string>
 #include <vector>
 
+#include "descriptor.hpp"
+
 using namespace emscripten;
+using namespace jcodecs;
 
 // Max threads constant (defined via CMake for MT builds)
 #ifndef MAX_THREADS
@@ -18,44 +21,32 @@ using namespace emscripten;
 #endif
 
 // ============================================================================
-// Color space to string conversion functions
+// JXL → jcodecs enum mapping
 // ============================================================================
 
-std::string colorPrimariesToString(JxlPrimaries primaries)
+std::optional<ColorPrimaries> mapJxlColorPrimaries(JxlPrimaries primaries)
 {
     switch (primaries)
     {
-    case JXL_PRIMARIES_SRGB:
-        return "bt709";
-    case JXL_PRIMARIES_2100:
-        return "bt2020";
-    case JXL_PRIMARIES_P3:
-        return "display-p3";
-    default:
-        return "unknown";
+    case JXL_PRIMARIES_SRGB: return ColorPrimaries::BT709;
+    case JXL_PRIMARIES_P3:   return ColorPrimaries::DisplayP3;
+    case JXL_PRIMARIES_2100: return ColorPrimaries::BT2020;
+    default:                 return std::nullopt;
     }
 }
 
-std::string transferFunctionToString(JxlTransferFunction tf)
+std::optional<TransferFunction> mapJxlTransferFunction(JxlTransferFunction tf)
 {
     switch (tf)
     {
-    case JXL_TRANSFER_FUNCTION_SRGB:
-        return "srgb";
-    case JXL_TRANSFER_FUNCTION_LINEAR:
-        return "linear";
-    case JXL_TRANSFER_FUNCTION_PQ:
-        return "pq";
-    case JXL_TRANSFER_FUNCTION_HLG:
-        return "hlg";
-    case JXL_TRANSFER_FUNCTION_709:
-        return "bt709";
-    case JXL_TRANSFER_FUNCTION_DCI:
-        return "dci";
-    case JXL_TRANSFER_FUNCTION_GAMMA:
-        return "gamma";
-    default:
-        return "unknown";
+    case JXL_TRANSFER_FUNCTION_709:    return TransferFunction::BT709;
+    case JXL_TRANSFER_FUNCTION_LINEAR: return TransferFunction::Linear;
+    case JXL_TRANSFER_FUNCTION_SRGB:   return TransferFunction::SRGB;
+    case JXL_TRANSFER_FUNCTION_PQ:     return TransferFunction::PQ;
+    case JXL_TRANSFER_FUNCTION_DCI:    return TransferFunction::DCI;
+    case JXL_TRANSFER_FUNCTION_HLG:    return TransferFunction::HLG;
+    case JXL_TRANSFER_FUNCTION_GAMMA:  return TransferFunction::Gamma;
+    default:                           return std::nullopt;
     }
 }
 
@@ -65,63 +56,6 @@ bool isHDRTransfer(JxlTransferFunction tf)
 }
 
 // ============================================================================
-// Timing structure
-// ============================================================================
-
-struct DecodeTimings
-{
-    double setup;
-    double basicInfo;
-    double colorInfo;
-    double decode;
-    double memcpy;
-    double total;
-};
-
-// ============================================================================
-// Mastering Display Metadata
-// ============================================================================
-
-struct MasteringDisplay
-{
-    float redX;
-    float redY;
-    float greenX;
-    float greenY;
-    float blueX;
-    float blueY;
-    float whiteX;
-    float whiteY;
-    float minLuminance;
-    float maxLuminance;
-    bool present;
-};
-
-// ============================================================================
-// Metadata structures
-// ============================================================================
-
-struct ImageMetadata
-{
-    std::string colorPrimaries;
-    std::string transferFunction;
-    std::string matrixCoefficients;  // JXL doesn't have this, always "identity" for RGB
-    bool fullRange;
-
-    uint32_t maxCLL;
-    uint32_t maxPALL;
-
-    MasteringDisplay masteringDisplay;
-
-    uintptr_t iccProfilePtr;
-    size_t iccProfileSize;
-
-    bool isHDR;
-    bool isAnimated;
-    uint32_t frameCount;
-};
-
-// ============================================================================
 // Result structures
 // ============================================================================
 
@@ -129,24 +63,98 @@ struct DecodeResult
 {
     uintptr_t dataPtr;
     size_t dataSize;
-    uint32_t width;
-    uint32_t height;
-    uint32_t depth;
-    uint32_t channels;
-    std::string dataType;  // "uint8", "uint16", "float16", "float32"
-    ImageMetadata metadata;
+    ImageDescriptor descriptor;
     std::string error;
-    DecodeTimings timings;
 };
 
-struct ImageInfo
+// ============================================================================
+// Build ImageDescriptor from decoded JXL info
+// ============================================================================
+
+ImageDescriptor buildDescriptor(
+    const JxlBasicInfo& info,
+    const JxlColorEncoding* colorEnc,
+    bool hasColorEnc,
+    uint32_t outputDepth,
+    JxlDataType outputJxlDataType)
 {
-    uint32_t width;
-    uint32_t height;
-    uint32_t depth;
-    uint32_t channels;
-    ImageMetadata metadata;
-};
+    ImageDescriptorBuilder builder;
+
+    uint32_t channels = info.num_color_channels + (info.alpha_bits > 0 ? 1 : 0);
+
+    // Geometry
+    builder.setGeometry(info.xsize, info.ysize);
+
+    // Channels
+    ChannelModel model;
+    if (channels == 1)      model = ChannelModel::Gray;
+    else if (channels == 2) model = ChannelModel::GrayA;
+    else if (channels == 4) model = ChannelModel::RGBA;
+    else                    model = ChannelModel::RGB;
+    builder.setChannels(model, channels);
+
+    // Numeric
+    SampleType sampleType;
+    DataType dataType;
+    switch (outputJxlDataType)
+    {
+    case JXL_TYPE_FLOAT:
+        sampleType = SampleType::Float;
+        dataType   = DataType::Float32;
+        break;
+    case JXL_TYPE_FLOAT16:
+        sampleType = SampleType::Float;
+        dataType   = DataType::Float16;
+        break;
+    case JXL_TYPE_UINT16:
+        sampleType = SampleType::Uint;
+        dataType   = DataType::Uint16;
+        break;
+    default: // JXL_TYPE_UINT8
+        sampleType = SampleType::Uint;
+        dataType   = DataType::Uint8;
+        break;
+    }
+    builder.setNumeric(sampleType, dataType, outputDepth);
+
+    // JXL always outputs full-range RGB
+    builder.setQuantization(QuantizationRange::full());
+
+    // Interleaved layout
+    builder.setSampleLayout(SampleLayout::Interleaved);
+
+    // Color and transfer info
+    if (hasColorEnc)
+    {
+        auto primaries = mapJxlColorPrimaries(colorEnc->primaries);
+        if (primaries) builder.setColorPrimaries(*primaries);
+        builder.setWhitePoint(WhitePoint::D65);
+
+        // JXL decodes to RGB → identity matrix
+        builder.setMatrixCoefficients(MatrixCoefficients::Identity);
+
+        auto tf = mapJxlTransferFunction(colorEnc->transfer_function);
+        if (tf) builder.setTransferFunction(*tf);
+
+        bool hdr = isHDRTransfer(colorEnc->transfer_function);
+        builder.setLuminanceReference(hdr ? LuminanceReference::HDR : LuminanceReference::SDR);
+    }
+    else
+    {
+        builder.setMatrixCoefficients(MatrixCoefficients::Identity);
+    }
+
+    // Alpha
+    if (info.alpha_bits > 0)
+        builder.setAlphaMode(AlphaMode::Straight);
+    else
+        builder.setAlphaMode(AlphaMode::None);
+
+    // Domain
+    builder.setImageDomain(ImageDomain::DisplayReferred);
+
+    return builder.build();
+}
 
 // ============================================================================
 // Main decode function using libjxl streaming API
@@ -155,18 +163,14 @@ struct ImageInfo
 DecodeResult decode(
     uintptr_t inputPtr,
     size_t inputSize,
+    int targetBitDepth,
     int maxThreads)
 {
-    double tStart = emscripten_get_now();
-    DecodeTimings timings = {0};
     DecodeResult result = {};
     result.dataPtr = 0;
     result.dataSize = 0;
-    result.depth = 8;
 
-    const uint8_t *jxlData = reinterpret_cast<const uint8_t *>(inputPtr);
-
-    double t0 = emscripten_get_now();
+    const uint8_t* jxlData = reinterpret_cast<const uint8_t*>(inputPtr);
 
     // Create decoder
     auto dec = JxlDecoderMake(nullptr);
@@ -204,14 +208,13 @@ DecodeResult decode(
     JxlDecoderSetInput(dec.get(), jxlData, inputSize);
     JxlDecoderCloseInput(dec.get());
 
-    timings.setup = emscripten_get_now() - t0;
-
-    JxlBasicInfo info;
-    JxlPixelFormat format;
+    JxlBasicInfo info = {};
+    JxlPixelFormat format = {};
     std::vector<uint8_t> pixels;
-    std::vector<uint8_t> iccProfile;
     JxlColorEncoding colorEnc = {};
     bool hasColorEnc = false;
+    uint32_t outputDepth = 8;
+    JxlDataType outputJxlDataType = JXL_TYPE_UINT8;
 
     // Process decoder events
     for (;;)
@@ -230,85 +233,79 @@ DecodeResult decode(
         }
         else if (status == JXL_DEC_BASIC_INFO)
         {
-            t0 = emscripten_get_now();
             if (JxlDecoderGetBasicInfo(dec.get(), &info) != JXL_DEC_SUCCESS)
             {
                 result.error = "Failed to get basic info";
                 return result;
             }
-
-            result.width = info.xsize;
-            result.height = info.ysize;
-            result.depth = info.bits_per_sample;
-            result.channels = info.num_color_channels + (info.alpha_bits > 0 ? 1 : 0);
-            result.metadata.isAnimated = info.have_animation;
-            result.metadata.frameCount = result.metadata.isAnimated ? 0 : 1;  // Will be updated if animated
-
-            timings.basicInfo = emscripten_get_now() - t0;
         }
         else if (status == JXL_DEC_COLOR_ENCODING)
         {
-            t0 = emscripten_get_now();
-
-            // Try to get ICC profile size
-            size_t iccSize = 0;
-            if (JxlDecoderGetICCProfileSize(dec.get(), JXL_COLOR_PROFILE_TARGET_DATA, &iccSize) == JXL_DEC_SUCCESS && iccSize > 0)
-            {
-                iccProfile.resize(iccSize);
-                if (JxlDecoderGetColorAsICCProfile(dec.get(), JXL_COLOR_PROFILE_TARGET_DATA,
-                                                    iccProfile.data(), iccSize) != JXL_DEC_SUCCESS)
-                {
-                    iccProfile.clear();
-                }
-            }
-
-            // Try to get color encoding
+            // Try to get color encoding as CICP
             if (JxlDecoderGetColorAsEncodedProfile(dec.get(), JXL_COLOR_PROFILE_TARGET_DATA,
                                                     &colorEnc) == JXL_DEC_SUCCESS)
             {
                 hasColorEnc = true;
             }
-
-            timings.colorInfo = emscripten_get_now() - t0;
         }
         else if (status == JXL_DEC_NEED_IMAGE_OUT_BUFFER)
         {
-            t0 = emscripten_get_now();
-
-            // Determine output format - auto-detect float vs integer from file
-            format.num_channels = result.channels;
+            // Determine output format
+            format.num_channels = info.num_color_channels + (info.alpha_bits > 0 ? 1 : 0);
             format.endianness = JXL_NATIVE_ENDIAN;
             format.align = 0;
 
-            // Check if the image is in float format
-            if (info.exponent_bits_per_sample > 0) {
-                // Float format detected
-                if (info.exponent_bits_per_sample == 5 && info.bits_per_sample == 16) {
-                    // float16 (5-bit exponent, 16-bit total)
-                    format.data_type = JXL_TYPE_FLOAT16;
-                    result.depth = 16;
-                    result.dataType = "float16";
-                } else if (info.exponent_bits_per_sample == 8 && info.bits_per_sample == 32) {
-                    // float32 (8-bit exponent, 32-bit total)
-                    format.data_type = JXL_TYPE_FLOAT;
-                    result.depth = 32;
-                    result.dataType = "float32";
-                } else {
-                    DecodeResult errorResult;
-                    errorResult.error = "Unsupported float format";
-                    return errorResult;
+            if (targetBitDepth > 0)
+            {
+                // Explicit depth requested — override file format
+                if (targetBitDepth <= 8)
+                {
+                    format.data_type   = JXL_TYPE_UINT8;
+                    outputDepth        = 8;
+                    outputJxlDataType  = JXL_TYPE_UINT8;
                 }
-            } else {
-                // Integer format
-                int outDepth = static_cast<int>(info.bits_per_sample);
-                if (outDepth < 8)
-                    outDepth = 8;
-                if (outDepth > 16)
-                    outDepth = 16;
+                else
+                {
+                    format.data_type   = JXL_TYPE_UINT16;
+                    outputDepth        = static_cast<uint32_t>(targetBitDepth);
+                    outputJxlDataType  = JXL_TYPE_UINT16;
+                }
+            }
+            else
+            {
+                // Auto-detect from file
+                if (info.exponent_bits_per_sample > 0)
+                {
+                    // Float format
+                    if (info.exponent_bits_per_sample == 5 && info.bits_per_sample == 16)
+                    {
+                        format.data_type  = JXL_TYPE_FLOAT16;
+                        outputDepth       = 16;
+                        outputJxlDataType = JXL_TYPE_FLOAT16;
+                    }
+                    else if (info.exponent_bits_per_sample == 8 && info.bits_per_sample == 32)
+                    {
+                        format.data_type  = JXL_TYPE_FLOAT;
+                        outputDepth       = 32;
+                        outputJxlDataType = JXL_TYPE_FLOAT;
+                    }
+                    else
+                    {
+                        result.error = "Unsupported float format";
+                        return result;
+                    }
+                }
+                else
+                {
+                    // Integer format — use source bit depth
+                    int outDepth = static_cast<int>(info.bits_per_sample);
+                    if (outDepth < 8)  outDepth = 8;
+                    if (outDepth > 16) outDepth = 16;
 
-                format.data_type = (outDepth > 8) ? JXL_TYPE_UINT16 : JXL_TYPE_UINT8;
-                result.depth = static_cast<uint32_t>(outDepth);
-                result.dataType = (outDepth > 8) ? "uint16" : "uint8";
+                    format.data_type  = (outDepth > 8) ? JXL_TYPE_UINT16 : JXL_TYPE_UINT8;
+                    outputDepth       = static_cast<uint32_t>(outDepth);
+                    outputJxlDataType = format.data_type;
+                }
             }
 
             // Get required buffer size
@@ -328,8 +325,7 @@ DecodeResult decode(
         }
         else if (status == JXL_DEC_FULL_IMAGE)
         {
-            timings.decode = emscripten_get_now() - t0;
-            // Image decoded successfully, continue to get JXL_DEC_SUCCESS
+            // Image decoded successfully, continue to JXL_DEC_SUCCESS
         }
         else if (status == JXL_DEC_SUCCESS)
         {
@@ -338,60 +334,19 @@ DecodeResult decode(
     }
 
     // Copy pixel data to malloc'd buffer (caller must free via Module._free)
-    t0 = emscripten_get_now();
-    void *dataPtr = malloc(pixels.size());
+    void* dataPtr = malloc(pixels.size());
     if (!dataPtr)
     {
         result.error = "Failed to allocate output buffer";
         return result;
     }
     std::memcpy(dataPtr, pixels.data(), pixels.size());
-    result.dataPtr = reinterpret_cast<uintptr_t>(dataPtr);
+    result.dataPtr  = reinterpret_cast<uintptr_t>(dataPtr);
     result.dataSize = pixels.size();
-    timings.memcpy = emscripten_get_now() - t0;
 
-    // Fill metadata
-    if (hasColorEnc)
-    {
-        result.metadata.colorPrimaries = colorPrimariesToString(colorEnc.primaries);
-        result.metadata.transferFunction = transferFunctionToString(colorEnc.transfer_function);
-    }
-    else
-    {
-        result.metadata.colorPrimaries = "unknown";
-        result.metadata.transferFunction = "unknown";
-    }
-    result.metadata.matrixCoefficients = "identity";  // JXL decodes to RGB
-    result.metadata.fullRange = true;  // JXL always full range for RGB output
-
-    // Copy ICC profile to malloc'd buffer
-    if (!iccProfile.empty())
-    {
-        uint8_t *iccPtr = static_cast<uint8_t *>(malloc(iccProfile.size()));
-        if (iccPtr)
-        {
-            std::memcpy(iccPtr, iccProfile.data(), iccProfile.size());
-            result.metadata.iccProfilePtr = reinterpret_cast<uintptr_t>(iccPtr);
-            result.metadata.iccProfileSize = iccProfile.size();
-        }
-    }
-    else
-    {
-        result.metadata.iccProfilePtr = 0;
-        result.metadata.iccProfileSize = 0;
-    }
-
-    // HDR detection
-    result.metadata.isHDR = (hasColorEnc && isHDRTransfer(colorEnc.transfer_function)) ||
-                            result.depth > 8;
-
-    // Content light level (JXL may not have this)
-    result.metadata.maxCLL = 0;
-    result.metadata.maxPALL = 0;
-    result.metadata.masteringDisplay.present = false;
-
-    timings.total = emscripten_get_now() - tStart;
-    result.timings = timings;
+    // Build ImageDescriptor
+    result.descriptor = buildDescriptor(info, hasColorEnc ? &colorEnc : nullptr, hasColorEnc,
+                                         outputDepth, outputJxlDataType);
 
     return result;
 }
@@ -400,28 +355,37 @@ DecodeResult decode(
 // Get image info without full decode
 // ============================================================================
 
-ImageInfo getImageInfo(uintptr_t inputPtr, size_t inputSize)
+ImageDescriptor getImageInfo(uintptr_t inputPtr, size_t inputSize)
 {
-    ImageInfo info = {};
-    const uint8_t *jxlData = reinterpret_cast<const uint8_t *>(inputPtr);
+    const uint8_t* jxlData = reinterpret_cast<const uint8_t*>(inputPtr);
 
     auto dec = JxlDecoderMake(nullptr);
     if (!dec)
-        return info;
+    {
+        ImageDescriptorBuilder builder;
+        builder.setGeometry(0, 0);
+        builder.setChannels(ChannelModel::RGB, 3);
+        builder.setNumeric(SampleType::Uint, DataType::Uint8, 8);
+        return builder.build();
+    }
 
     if (JxlDecoderSubscribeEvents(dec.get(),
                                    JXL_DEC_BASIC_INFO | JXL_DEC_COLOR_ENCODING) != JXL_DEC_SUCCESS)
     {
-        return info;
+        ImageDescriptorBuilder builder;
+        builder.setGeometry(0, 0);
+        builder.setChannels(ChannelModel::RGB, 3);
+        builder.setNumeric(SampleType::Uint, DataType::Uint8, 8);
+        return builder.build();
     }
 
     JxlDecoderSetInput(dec.get(), jxlData, inputSize);
     JxlDecoderCloseInput(dec.get());
 
-    JxlBasicInfo basicInfo;
+    JxlBasicInfo basicInfo = {};
     JxlColorEncoding colorEnc = {};
     bool hasColorEnc = false;
-    std::vector<uint8_t> iccProfile;
+    bool hasBasicInfo = false;
 
     for (;;)
     {
@@ -429,51 +393,21 @@ ImageInfo getImageInfo(uintptr_t inputPtr, size_t inputSize)
 
         if (status == JXL_DEC_ERROR || status == JXL_DEC_NEED_MORE_INPUT)
         {
-            return info;
+            break;
         }
         else if (status == JXL_DEC_BASIC_INFO)
         {
-            if (JxlDecoderGetBasicInfo(dec.get(), &basicInfo) != JXL_DEC_SUCCESS)
-            {
-                return info;
-            }
-
-            info.width = basicInfo.xsize;
-            info.height = basicInfo.ysize;
-            info.depth = basicInfo.bits_per_sample;
-            info.channels = basicInfo.num_color_channels + (basicInfo.alpha_bits > 0 ? 1 : 0);
-            info.metadata.isAnimated = basicInfo.have_animation;
-            info.metadata.frameCount = info.metadata.isAnimated ? 0 : 1;
+            if (JxlDecoderGetBasicInfo(dec.get(), &basicInfo) == JXL_DEC_SUCCESS)
+                hasBasicInfo = true;
         }
         else if (status == JXL_DEC_COLOR_ENCODING)
         {
-            // Get ICC profile
-            size_t iccSize = 0;
-            if (JxlDecoderGetICCProfileSize(dec.get(), JXL_COLOR_PROFILE_TARGET_DATA, &iccSize) == JXL_DEC_SUCCESS && iccSize > 0)
-            {
-                iccProfile.resize(iccSize);
-                if (JxlDecoderGetColorAsICCProfile(dec.get(), JXL_COLOR_PROFILE_TARGET_DATA,
-                                                    iccProfile.data(), iccSize) == JXL_DEC_SUCCESS)
-                {
-                    uint8_t *iccPtr = static_cast<uint8_t *>(malloc(iccProfile.size()));
-                    if (iccPtr)
-                    {
-                        std::memcpy(iccPtr, iccProfile.data(), iccProfile.size());
-                        info.metadata.iccProfilePtr = reinterpret_cast<uintptr_t>(iccPtr);
-                        info.metadata.iccProfileSize = iccProfile.size();
-                    }
-                }
-            }
-
-            // Get color encoding
             if (JxlDecoderGetColorAsEncodedProfile(dec.get(), JXL_COLOR_PROFILE_TARGET_DATA,
                                                     &colorEnc) == JXL_DEC_SUCCESS)
             {
                 hasColorEnc = true;
             }
-
-            // We have all the info we need
-            break;
+            break; // Have all info we need
         }
         else if (status == JXL_DEC_SUCCESS)
         {
@@ -481,26 +415,42 @@ ImageInfo getImageInfo(uintptr_t inputPtr, size_t inputSize)
         }
     }
 
-    // Fill metadata
-    if (hasColorEnc)
+    if (!hasBasicInfo)
     {
-        info.metadata.colorPrimaries = colorPrimariesToString(colorEnc.primaries);
-        info.metadata.transferFunction = transferFunctionToString(colorEnc.transfer_function);
+        ImageDescriptorBuilder builder;
+        builder.setGeometry(0, 0);
+        builder.setChannels(ChannelModel::RGB, 3);
+        builder.setNumeric(SampleType::Uint, DataType::Uint8, 8);
+        return builder.build();
+    }
+
+    // Determine native data type from file (no targetBitDepth for info)
+    uint32_t nativeDepth;
+    JxlDataType nativeDataType;
+    if (basicInfo.exponent_bits_per_sample > 0)
+    {
+        if (basicInfo.exponent_bits_per_sample == 5 && basicInfo.bits_per_sample == 16)
+        {
+            nativeDepth    = 16;
+            nativeDataType = JXL_TYPE_FLOAT16;
+        }
+        else
+        {
+            nativeDepth    = 32;
+            nativeDataType = JXL_TYPE_FLOAT;
+        }
     }
     else
     {
-        info.metadata.colorPrimaries = "unknown";
-        info.metadata.transferFunction = "unknown";
+        uint32_t d = basicInfo.bits_per_sample;
+        if (d < 8)  d = 8;
+        if (d > 16) d = 16;
+        nativeDepth    = d;
+        nativeDataType = (d > 8) ? JXL_TYPE_UINT16 : JXL_TYPE_UINT8;
     }
-    info.metadata.matrixCoefficients = "identity";
-    info.metadata.fullRange = true;
-    info.metadata.isHDR = (hasColorEnc && isHDRTransfer(colorEnc.transfer_function)) ||
-                          info.depth > 8;
-    info.metadata.maxCLL = 0;
-    info.metadata.maxPALL = 0;
-    info.metadata.masteringDisplay.present = false;
 
-    return info;
+    return buildDescriptor(basicInfo, hasColorEnc ? &colorEnc : nullptr, hasColorEnc,
+                           nativeDepth, nativeDataType);
 }
 
 // ============================================================================
@@ -509,61 +459,13 @@ ImageInfo getImageInfo(uintptr_t inputPtr, size_t inputSize)
 
 EMSCRIPTEN_BINDINGS(jxl_decoder)
 {
-    value_object<MasteringDisplay>("MasteringDisplay")
-        .field("redX", &MasteringDisplay::redX)
-        .field("redY", &MasteringDisplay::redY)
-        .field("greenX", &MasteringDisplay::greenX)
-        .field("greenY", &MasteringDisplay::greenY)
-        .field("blueX", &MasteringDisplay::blueX)
-        .field("blueY", &MasteringDisplay::blueY)
-        .field("whiteX", &MasteringDisplay::whiteX)
-        .field("whiteY", &MasteringDisplay::whiteY)
-        .field("minLuminance", &MasteringDisplay::minLuminance)
-        .field("maxLuminance", &MasteringDisplay::maxLuminance)
-        .field("present", &MasteringDisplay::present);
-
-    value_object<ImageMetadata>("ImageMetadata")
-        .field("colorPrimaries", &ImageMetadata::colorPrimaries)
-        .field("transferFunction", &ImageMetadata::transferFunction)
-        .field("matrixCoefficients", &ImageMetadata::matrixCoefficients)
-        .field("fullRange", &ImageMetadata::fullRange)
-        .field("maxCLL", &ImageMetadata::maxCLL)
-        .field("maxPALL", &ImageMetadata::maxPALL)
-        .field("masteringDisplay", &ImageMetadata::masteringDisplay)
-        .field("iccProfilePtr", &ImageMetadata::iccProfilePtr)
-        .field("iccProfileSize", &ImageMetadata::iccProfileSize)
-        .field("isHDR", &ImageMetadata::isHDR)
-        .field("isAnimated", &ImageMetadata::isAnimated)
-        .field("frameCount", &ImageMetadata::frameCount);
-
     value_object<DecodeResult>("DecodeResult")
-        .field("dataPtr", &DecodeResult::dataPtr)
-        .field("dataSize", &DecodeResult::dataSize)
-        .field("width", &DecodeResult::width)
-        .field("height", &DecodeResult::height)
-        .field("depth", &DecodeResult::depth)
-        .field("channels", &DecodeResult::channels)
-        .field("dataType", &DecodeResult::dataType)
-        .field("metadata", &DecodeResult::metadata)
-        .field("timings", &DecodeResult::timings)
-        .field("error", &DecodeResult::error);
+        .field("dataPtr",    &DecodeResult::dataPtr)
+        .field("dataSize",   &DecodeResult::dataSize)
+        .field("descriptor", &DecodeResult::descriptor)
+        .field("error",      &DecodeResult::error);
 
-    value_object<ImageInfo>("ImageInfo")
-        .field("width", &ImageInfo::width)
-        .field("height", &ImageInfo::height)
-        .field("depth", &ImageInfo::depth)
-        .field("channels", &ImageInfo::channels)
-        .field("metadata", &ImageInfo::metadata);
-
-    value_object<DecodeTimings>("DecodeTimings")
-        .field("setup", &DecodeTimings::setup)
-        .field("basicInfo", &DecodeTimings::basicInfo)
-        .field("colorInfo", &DecodeTimings::colorInfo)
-        .field("decode", &DecodeTimings::decode)
-        .field("memcpy", &DecodeTimings::memcpy)
-        .field("total", &DecodeTimings::total);
-
-    function("decode", &decode);
+    function("decode",       &decode);
     function("getImageInfo", &getImageInfo);
 
     constant("MAX_THREADS", MAX_THREADS);

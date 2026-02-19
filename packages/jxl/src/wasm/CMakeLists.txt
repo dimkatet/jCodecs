@@ -21,6 +21,10 @@ set(BROTLI_COMMON_LIB "" CACHE PATH "Path to libbrotlicommon.a")
 set(LIBJXL_INCLUDE "" CACHE PATH "Path to libjxl includes")
 set(LIBYUV_LIB "" CACHE PATH "Path to libyuv.a (optional)")
 
+# jCodecs core library (ImageDescriptor)
+set(JCODECS_CORE_LIB "" CACHE PATH "Path to libjcodecs_core.a")
+set(JCODECS_CORE_INCLUDE "" CACHE PATH "Path to jcodecs core includes")
+
 # Common Emscripten flags (same as AVIF)
 set(COMMON_LINK_FLAGS
     "-s WASM=1"
@@ -70,27 +74,27 @@ function(add_optional_libyuv target)
 endfunction()
 
 # --- Decoder (single-threaded) ---
-add_executable(jxl_dec jxl_dec.cpp)
-target_include_directories(jxl_dec PRIVATE ${LIBJXL_INCLUDE})
+add_executable(jxl_dec jxl_dec.cpp ${JCODECS_CORE_INCLUDE}/descriptor-embind.cpp)
+target_include_directories(jxl_dec PRIVATE ${LIBJXL_INCLUDE} ${JCODECS_CORE_INCLUDE})
 target_compile_options(jxl_dec PRIVATE -O3 -flto -msimd128)
 set_target_properties(jxl_dec PROPERTIES
     LINK_FLAGS "${COMMON_LINK_FLAGS_STR} -s EXPORT_NAME='createJXLDecoder' --emit-tsd jxl_dec.d.ts"
     SUFFIX ".js"
 )
-target_link_libraries(jxl_dec ${JXL_COMMON_LIBS})
+target_link_libraries(jxl_dec ${JXL_COMMON_LIBS} ${JCODECS_CORE_LIB})
 add_optional_libyuv(jxl_dec)
 
 # --- Decoder (multi-threaded) ---
 if(BUILD_MT)
-    add_executable(jxl_dec_mt jxl_dec.cpp)
-    target_include_directories(jxl_dec_mt PRIVATE ${LIBJXL_INCLUDE})
+    add_executable(jxl_dec_mt jxl_dec.cpp ${JCODECS_CORE_INCLUDE}/descriptor-embind.cpp)
+    target_include_directories(jxl_dec_mt PRIVATE ${LIBJXL_INCLUDE} ${JCODECS_CORE_INCLUDE})
     target_compile_options(jxl_dec_mt PRIVATE -O3 -flto -pthread)
     target_compile_definitions(jxl_dec_mt PRIVATE MAX_THREADS=${MAX_THREADS})
     set_target_properties(jxl_dec_mt PROPERTIES
         LINK_FLAGS "${COMMON_LINK_FLAGS_STR} ${MT_FLAGS_STR} -s EXPORT_NAME='createJXLDecoderMT' --emit-tsd jxl_dec_mt.d.ts"
         SUFFIX ".js"
     )
-    target_link_libraries(jxl_dec_mt ${JXL_COMMON_LIBS} ${LIBJXL_THREADS_LIB})
+    target_link_libraries(jxl_dec_mt ${JXL_COMMON_LIBS} ${LIBJXL_THREADS_LIB} ${JCODECS_CORE_LIB})
     add_optional_libyuv(jxl_dec_mt)
 endif()
 

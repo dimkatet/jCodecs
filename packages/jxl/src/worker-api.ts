@@ -4,7 +4,7 @@
 import { CodecWorkerClient } from "@dimkatet/jcodecs-core/codec-worker-client";
 import { isMultiThreadSupported } from "@dimkatet/jcodecs-core";
 import type { JXLEncodeOptions, JXLDecodeOptions } from "./options";
-import type { JXLImageData } from "./types";
+import type { JXLImageData, JXLEncodeDescriptor } from "./types";
 import type { JXLWorkerHandlers, WorkerInitPayload } from "./worker";
 import {
   workerUrl as defaultWorkerUrl,
@@ -49,10 +49,11 @@ export async function createWorkerPool(
 
 export async function encodeInWorker(
   client: JXLWorkerClient,
-  imageData: JXLImageData,
+  data: Uint8Array | Uint16Array | Float16Array | Float32Array,
+  descriptor: JXLEncodeDescriptor,
   options?: JXLEncodeOptions,
 ): Promise<Uint8Array> {
-  return client.call("encode", { imageData, options });
+  return client.call("encode", { data, descriptor, options }, [data.buffer]);
 }
 
 export async function decodeInWorker(

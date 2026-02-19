@@ -6,7 +6,7 @@
  */
 
 import type { WASMModule } from "./memory";
-import type { DataType } from "./types";
+import type { DataType } from "../types";
 
 /**
  * Maps DataType to corresponding TypedArray type

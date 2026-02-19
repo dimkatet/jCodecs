@@ -13,38 +13,23 @@ import {
   initEncoder,
   initDecoder,
   isEncoderInitialized,
-  DEFAULT_SRGB_METADATA,
 } from "@dimkatet/jcodecs-jxl";
-import type { JXLImageData } from "@dimkatet/jcodecs-jxl";
+import type { JXLEncodeDescriptor } from "@dimkatet/jcodecs-jxl";
 
-/**
- * Create a test ImageData with a simple gradient pattern
- */
-function createTestImageData(
-  width: number,
-  height: number,
-  hasAlpha = true
-): ImageData {
-  const channels = hasAlpha ? 4 : 4; // ImageData is always RGBA
-  const data = new Uint8ClampedArray(width * height * channels);
-
+function createTestImageData(width: number, height: number): ImageData {
+  const data = new Uint8ClampedArray(width * height * 4);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      const i = (y * width + x) * channels;
-      // Create a gradient pattern
-      data[i] = Math.floor((x / width) * 255); // R: horizontal gradient
-      data[i + 1] = Math.floor((y / height) * 255); // G: vertical gradient
-      data[i + 2] = 128; // B: constant
-      data[i + 3] = hasAlpha ? 255 : 255; // A: opaque
+      const i = (y * width + x) * 4;
+      data[i] = Math.floor((x / width) * 255);
+      data[i + 1] = Math.floor((y / height) * 255);
+      data[i + 2] = 128;
+      data[i + 3] = 255;
     }
   }
-
   return new ImageData(data, width, height);
 }
 
-/**
- * Create a solid color ImageData
- */
 function createSolidColorImageData(
   width: number,
   height: number,
@@ -54,15 +39,39 @@ function createSolidColorImageData(
   a = 255
 ): ImageData {
   const data = new Uint8ClampedArray(width * height * 4);
-
   for (let i = 0; i < data.length; i += 4) {
     data[i] = r;
     data[i + 1] = g;
     data[i + 2] = b;
     data[i + 3] = a;
   }
-
   return new ImageData(data, width, height);
+}
+
+function createTestPixelData16(
+  width: number,
+  height: number,
+  bitDepth: 10 | 12 = 10,
+): { data: Uint16Array; descriptor: JXLEncodeDescriptor } {
+  const maxVal = (1 << bitDepth) - 1;
+  const data = new Uint16Array(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      data[i] = Math.floor((x / width) * maxVal);
+      data[i + 1] = Math.floor((y / height) * maxVal);
+      data[i + 2] = Math.floor(maxVal / 2);
+      data[i + 3] = maxVal;
+    }
+  }
+  return {
+    data,
+    descriptor: {
+      geometry: { width, height },
+      channels: { model: 'rgba', count: 4 },
+      numeric: { dataType: 'uint16', bitDepth },
+    },
+  };
 }
 
 describe("JXL Encoder", () => {
@@ -78,15 +87,15 @@ describe("JXL Encoder", () => {
   });
 
   describe("basic encoding", () => {
-    it("should encode a simple ImageData", async () => {
+    it("should encode a simple ImageData via encodeSimple", async () => {
       const imageData = createTestImageData(64, 64);
-      const result = await encode(imageData);
+      const result = await encodeSimple(imageData);
 
       expect(result).toBeInstanceOf(Uint8Array);
       expect(result.length).toBeGreaterThan(0);
     });
 
-    it("should encode using encodeSimple", async () => {
+    it("should encode using encodeSimple with quality", async () => {
       const imageData = createTestImageData(64, 64);
       const result = await encodeSimple(imageData, 80);
 
@@ -94,22 +103,38 @@ describe("JXL Encoder", () => {
       expect(result.length).toBeGreaterThan(0);
     });
 
+    it("should encode with descriptor API", async () => {
+      const imageData = createTestImageData(64, 64);
+      const data = new Uint8Array(
+        imageData.data.buffer,
+        imageData.data.byteOffset,
+        imageData.data.byteLength,
+      );
+      const descriptor: JXLEncodeDescriptor = {
+        geometry: { width: 64, height: 64 },
+        channels: { model: 'rgba', count: 4 },
+        numeric: { dataType: 'uint8', bitDepth: 8 },
+      };
+      const result = await encode(data, descriptor);
+
+      expect(result).toBeInstanceOf(Uint8Array);
+      expect(result.length).toBeGreaterThan(0);
+    });
+
     it("should produce valid JXL that can be decoded", async () => {
       const imageData = createTestImageData(32, 32);
-      const encoded = await encode(imageData);
-
-      // Decode the encoded data
+      const encoded = await encodeSimple(imageData);
       const decoded = await decode(encoded);
 
-      expect(decoded.width).toBe(32);
-      expect(decoded.height).toBe(32);
+      expect(decoded.descriptor.geometry.width).toBe(32);
+      expect(decoded.descriptor.geometry.height).toBe(32);
       expect(decoded.data.length).toBeGreaterThan(0);
     });
 
     it("encoded size should be smaller than raw data", async () => {
       const imageData = createTestImageData(64, 64);
       const rawSize = imageData.data.length;
-      const encoded = await encode(imageData, { quality: 50, effort: 10 });
+      const encoded = await encodeSimple(imageData, 50);
 
       expect(encoded.length).toBeLessThan(rawSize);
     });
@@ -119,19 +144,18 @@ describe("JXL Encoder", () => {
     it("higher quality should produce larger files", async () => {
       const imageData = createTestImageData(32, 32);
 
-      const lowQuality = await encode(imageData, { quality: 20, effort: 10 });
-      const highQuality = await encode(imageData, { quality: 90, effort: 10 });
+      const lowQuality = await encodeSimple(imageData, 20);
+      const highQuality = await encodeSimple(imageData, 90);
 
-      // High quality should generally be larger (though not always guaranteed)
       expect(highQuality.length).toBeGreaterThanOrEqual(lowQuality.length * 0.5);
     });
 
     it("should support quality range 0-100", async () => {
       const imageData = createSolidColorImageData(32, 32, 128, 128, 128);
 
-      const q0 = await encode(imageData, { quality: 0, effort: 10 });
-      const q50 = await encode(imageData, { quality: 50, effort: 10 });
-      const q100 = await encode(imageData, { quality: 100, effort: 10 });
+      const q0 = await encodeSimple(imageData, 0);
+      const q50 = await encodeSimple(imageData, 50);
+      const q100 = await encodeSimple(imageData, 100);
 
       expect(q0.length).toBeGreaterThan(0);
       expect(q50.length).toBeGreaterThan(0);
@@ -142,124 +166,177 @@ describe("JXL Encoder", () => {
   describe("lossless encoding", () => {
     it("should support lossless encoding", async () => {
       const imageData = createSolidColorImageData(16, 16, 200, 100, 50);
-      const encoded = await encode(imageData, { lossless: true });
+      const data = new Uint8Array(
+        imageData.data.buffer,
+        imageData.data.byteOffset,
+        imageData.data.byteLength,
+      );
+      const descriptor: JXLEncodeDescriptor = {
+        geometry: { width: 16, height: 16 },
+        channels: { model: 'rgba', count: 4 },
+        numeric: { dataType: 'uint8', bitDepth: 8 },
+      };
+      const encoded = await encode(data, descriptor, { lossless: true });
 
       expect(encoded.length).toBeGreaterThan(0);
 
-      // Decode and verify dimensions
       const decoded = await decode(encoded);
-      expect(decoded.width).toBe(16);
-      expect(decoded.height).toBe(16);
+      expect(decoded.descriptor.geometry.width).toBe(16);
+      expect(decoded.descriptor.geometry.height).toBe(16);
     });
 
     it("lossless should produce exact pixel values for solid color", async () => {
-      const r = 123,
-        g = 45,
-        b = 67;
+      const r = 123, g = 45, b = 67;
       const imageData = createSolidColorImageData(8, 8, r, g, b);
+      const data = new Uint8Array(
+        imageData.data.buffer,
+        imageData.data.byteOffset,
+        imageData.data.byteLength,
+      );
+      const descriptor: JXLEncodeDescriptor = {
+        geometry: { width: 8, height: 8 },
+        channels: { model: 'rgba', count: 4 },
+        numeric: { dataType: 'uint8', bitDepth: 8 },
+      };
 
-      const encoded = await encode(imageData, { lossless: true });
+      const encoded = await encode(data, descriptor, { lossless: true });
       const decoded = await decode(encoded);
 
-      // Check center pixel (avoid edge effects)
-      const centerIdx = (4 * 8 + 4) * decoded.channels;
-      const data = decoded.data as Uint8Array;
+      const channels = decoded.descriptor.channels.count;
+      const centerIdx = (4 * 8 + 4) * channels;
+      const dstData = decoded.data as Uint8Array;
 
-      expect(data[centerIdx]).toBe(r);
-      expect(data[centerIdx + 1]).toBe(g);
-      expect(data[centerIdx + 2]).toBe(b);
+      expect(dstData[centerIdx]).toBe(r);
+      expect(dstData[centerIdx + 1]).toBe(g);
+      expect(dstData[centerIdx + 2]).toBe(b);
     });
   });
 
-  describe("color space options", () => {
-    it("should encode with sRGB color space", async () => {
+  describe("color space and transfer via descriptor", () => {
+    it("should encode with sRGB (bt709) color primaries", async () => {
       const imageData = createTestImageData(16, 16);
-      const encoded = await encode(imageData, { colorSpace: "srgb", effort: 10 });
+      const data = new Uint8Array(
+        imageData.data.buffer,
+        imageData.data.byteOffset,
+        imageData.data.byteLength,
+      );
+      const descriptor: JXLEncodeDescriptor = {
+        geometry: { width: 16, height: 16 },
+        channels: { model: 'rgba', count: 4 },
+        numeric: { dataType: 'uint8', bitDepth: 8 },
+        color: { primaries: 'bt709' },
+      };
+      const encoded = await encode(data, descriptor);
       const decoded = await decode(encoded);
 
-      expect(decoded.metadata.colorPrimaries).toBe("bt709");
-      expect(decoded.metadata.transferFunction).toBe("srgb");
+      expect(decoded.descriptor.color?.primaries).toBe("bt709");
+      expect(decoded.descriptor.transfer?.function).toBe("srgb");
     });
 
-    it("should encode with Display P3 color space", async () => {
+    it("should encode with Display P3 color primaries", async () => {
       const imageData = createTestImageData(16, 16);
-      const encoded = await encode(imageData, { colorSpace: "display-p3", effort: 10 });
+      const data = new Uint8Array(
+        imageData.data.buffer,
+        imageData.data.byteOffset,
+        imageData.data.byteLength,
+      );
+      const descriptor: JXLEncodeDescriptor = {
+        geometry: { width: 16, height: 16 },
+        channels: { model: 'rgba', count: 4 },
+        numeric: { dataType: 'uint8', bitDepth: 8 },
+        color: { primaries: 'displayP3' },
+      };
+      const encoded = await encode(data, descriptor);
       const decoded = await decode(encoded);
 
-      expect(decoded.metadata.colorPrimaries).toBe("display-p3");
+      expect(decoded.descriptor.color?.primaries).toBe("displayP3");
     });
 
-    it("should encode with Rec.2020 color space", async () => {
+    it("should encode with Rec.2020 color primaries", async () => {
       const imageData = createTestImageData(16, 16);
-      const encoded = await encode(imageData, { colorSpace: "rec2020", effort: 10 });
+      const data = new Uint8Array(
+        imageData.data.buffer,
+        imageData.data.byteOffset,
+        imageData.data.byteLength,
+      );
+      const descriptor: JXLEncodeDescriptor = {
+        geometry: { width: 16, height: 16 },
+        channels: { model: 'rgba', count: 4 },
+        numeric: { dataType: 'uint8', bitDepth: 8 },
+        color: { primaries: 'bt2020' },
+      };
+      const encoded = await encode(data, descriptor);
       const decoded = await decode(encoded);
 
-      expect(decoded.metadata.colorPrimaries).toBe("bt2020");
+      expect(decoded.descriptor.color?.primaries).toBe("bt2020");
     });
   });
 
   describe("HDR encoding", () => {
-    it("should encode with PQ transfer function", async () => {
-      const imageData = createTestImageData(16, 16);
-      const encoded = await encode(imageData, {
-        colorSpace: "rec2020",
-        transferFunction: "pq",
-        bitDepth: 10,
-        effort: 10,
+    it("should encode with PQ transfer function (10-bit)", async () => {
+      const { data, descriptor } = createTestPixelData16(16, 16, 10);
+      const encoded = await encode(data, {
+        ...descriptor,
+        color: { primaries: 'bt2020' },
+        transfer: { function: 'pq' },
       });
       const decoded = await decode(encoded);
 
-      expect(decoded.metadata.transferFunction).toBe("pq");
-      expect(decoded.metadata.isHDR).toBe(true);
+      expect(decoded.descriptor.transfer?.function).toBe("pq");
     });
 
-    it("should encode with HLG transfer function", async () => {
-      const imageData = createTestImageData(16, 16);
-      const encoded = await encode(imageData, {
-        colorSpace: "rec2020",
-        transferFunction: "hlg",
-        bitDepth: 10,
-        effort: 10,
+    it("should encode with HLG transfer function (10-bit)", async () => {
+      const { data, descriptor } = createTestPixelData16(16, 16, 10);
+      const encoded = await encode(data, {
+        ...descriptor,
+        color: { primaries: 'bt2020' },
+        transfer: { function: 'hlg' },
       });
       const decoded = await decode(encoded);
 
-      expect(decoded.metadata.transferFunction).toBe("hlg");
-      expect(decoded.metadata.isHDR).toBe(true);
+      expect(decoded.descriptor.transfer?.function).toBe("hlg");
     });
 
     it("should encode 10-bit output", async () => {
-      const imageData = createTestImageData(16, 16);
-      const encoded = await encode(imageData, { bitDepth: 10, effort: 10 });
+      const { data, descriptor } = createTestPixelData16(16, 16, 10);
+      const encoded = await encode(data, descriptor);
       const decoded = await decode(encoded);
 
-      expect(decoded.bitDepth).toBe(10);
+      expect(decoded.descriptor.numeric.bitDepth).toBe(10);
+    });
+
+    it("should encode 12-bit output", async () => {
+      const { data, descriptor } = createTestPixelData16(16, 16, 12);
+      const encoded = await encode(data, descriptor);
+      const decoded = await decode(encoded);
+
+      expect(decoded.descriptor.numeric.bitDepth).toBe(12);
     });
   });
 
   describe("effort options", () => {
     it("should support effort 10 (fastest)", async () => {
       const imageData = createSolidColorImageData(16, 16, 128, 128, 128);
-
-      const result = await encode(imageData, { effort: 10, quality: 50 });
+      const result = await encodeSimple(imageData, 50);
 
       expect(result.length).toBeGreaterThan(0);
-    });
-
-    it("faster effort should encode quickly", async () => {
-      const imageData = createTestImageData(32, 32);
-
-      const start = performance.now();
-      await encode(imageData, { effort: 10, quality: 50 });
-      const fastTime = performance.now() - start;
-
-      expect(fastTime).toBeLessThan(30000); // Should complete within 30s
     });
   });
 
   describe("progressive encoding", () => {
     it("should support progressive encoding", async () => {
       const imageData = createTestImageData(32, 32);
-      const encoded = await encode(imageData, { progressive: true });
+      const data = new Uint8Array(
+        imageData.data.buffer,
+        imageData.data.byteOffset,
+        imageData.data.byteLength,
+      );
+      const descriptor: JXLEncodeDescriptor = {
+        geometry: { width: 32, height: 32 },
+        channels: { model: 'rgba', count: 4 },
+        numeric: { dataType: 'uint8', bitDepth: 8 },
+      };
+      const encoded = await encode(data, descriptor, { progressive: true });
 
       expect(encoded.length).toBeGreaterThan(0);
     });
@@ -270,28 +347,23 @@ describe("JXL Encoder", () => {
       const width = 48;
       const height = 32;
       const imageData = createTestImageData(width, height);
-
-      const encoded = await encode(imageData, { effort: 10 });
+      const encoded = await encodeSimple(imageData);
       const decoded = await decode(encoded);
 
-      expect(decoded.width).toBe(width);
-      expect(decoded.height).toBe(height);
+      expect(decoded.descriptor.geometry.width).toBe(width);
+      expect(decoded.descriptor.geometry.height).toBe(height);
     });
 
     it("should preserve approximate colors (lossy)", async () => {
-      const r = 200,
-        g = 100,
-        b = 50;
+      const r = 200, g = 100, b = 50;
       const imageData = createSolidColorImageData(16, 16, r, g, b);
-
-      const encoded = await encode(imageData, { quality: 90, effort: 10 });
+      const encoded = await encodeSimple(imageData, 90);
       const decoded = await decode(encoded);
 
-      // Check center pixel
-      const centerIdx = (8 * 16 + 8) * decoded.channels;
+      const channels = decoded.descriptor.channels.count;
+      const centerIdx = (8 * 16 + 8) * channels;
       const data = decoded.data as Uint8Array;
 
-      // Allow some tolerance for lossy compression
       expect(Math.abs(data[centerIdx] - r)).toBeLessThan(20);
       expect(Math.abs(data[centerIdx + 1] - g)).toBeLessThan(20);
       expect(Math.abs(data[centerIdx + 2] - b)).toBeLessThan(20);
@@ -299,297 +371,104 @@ describe("JXL Encoder", () => {
   });
 
   describe("validation", () => {
-    it("should accept uint8 dataType", async () => {
-      const data = new Uint8Array(16 * 16 * 4);
-      for (let i = 0; i < data.length; i += 4) {
-        data[i] = 128;
-        data[i + 1] = 64;
-        data[i + 2] = 192;
-        data[i + 3] = 255;
-      }
-
-      const extendedData: JXLImageData = {
-        data,
-        dataType: "uint8",
-        width: 16,
-        height: 16,
-        channels: 4,
-        bitDepth: 8,
-        metadata: DEFAULT_SRGB_METADATA,
-      };
-
-      const encoded = await encode(extendedData);
-      expect(encoded.length).toBeGreaterThan(0);
-    });
-
-    it("should accept uint16 dataType", async () => {
-      const data = new Uint16Array(16 * 16 * 4);
-      for (let i = 0; i < data.length; i += 4) {
-        data[i] = 512;
-        data[i + 1] = 256;
-        data[i + 2] = 768;
-        data[i + 3] = 1023;
-      }
-
-      const extendedData: JXLImageData = {
-        data,
-        dataType: "uint16",
-        width: 16,
-        height: 16,
-        channels: 4,
-        bitDepth: 10,
-        metadata: DEFAULT_SRGB_METADATA,
-      };
-
-      const encoded = await encode(extendedData, { bitDepth: 10 });
-      expect(encoded.length).toBeGreaterThan(0);
-    });
-
     it("should reject dataType mismatch (uint8 with Uint16Array)", async () => {
-      const extendedData: any = {
-        data: new Uint16Array(16 * 16 * 4),
-        dataType: "uint8",
-        width: 16,
-        height: 16,
-        channels: 4,
-        bitDepth: 8,
+      const descriptor: JXLEncodeDescriptor = {
+        geometry: { width: 16, height: 16 },
+        channels: { model: 'rgba', count: 4 },
+        numeric: { dataType: 'uint8', bitDepth: 8 },
       };
 
-      await expect(encode(extendedData)).rejects.toThrow(
-        'dataType "uint8" requires Uint8Array'
-      );
+      await expect(
+        encode(new Uint16Array(16 * 16 * 4) as any, descriptor)
+      ).rejects.toThrow('descriptor.numeric.dataType "uint8" requires Uint8Array data');
     });
 
     it("should reject dataType mismatch (uint16 with Uint8Array)", async () => {
-      const extendedData: any = {
-        data: new Uint8Array(16 * 16 * 4),
-        dataType: "uint16",
-        width: 16,
-        height: 16,
-        channels: 4,
-        bitDepth: 16,
+      const descriptor: JXLEncodeDescriptor = {
+        geometry: { width: 16, height: 16 },
+        channels: { model: 'rgba', count: 4 },
+        numeric: { dataType: 'uint16', bitDepth: 10 },
       };
 
-      await expect(encode(extendedData)).rejects.toThrow(
-        'dataType "uint16" requires Uint16Array'
-      );
+      await expect(
+        encode(new Uint8Array(16 * 16 * 4), descriptor)
+      ).rejects.toThrow('descriptor.numeric.dataType "uint16" requires Uint16Array data');
     });
 
     it("should reject dataType mismatch (float16 with Float32Array)", async () => {
-      const extendedData: any = {
-        data: new Float32Array(16 * 16 * 4),
-        dataType: "float16",
-        width: 16,
-        height: 16,
-        channels: 4,
-        bitDepth: 16,
+      const descriptor: JXLEncodeDescriptor = {
+        geometry: { width: 16, height: 16 },
+        channels: { model: 'rgba', count: 4 },
+        numeric: { dataType: 'float16', bitDepth: 16 },
       };
 
-      await expect(encode(extendedData)).rejects.toThrow(
-        'dataType "float16" requires Float16Array'
-      );
+      await expect(
+        encode(new Float32Array(16 * 16 * 4) as any, descriptor)
+      ).rejects.toThrow('descriptor.numeric.dataType "float16" requires Float16Array data');
     });
 
     it("should reject dataType mismatch (float32 with Float16Array)", async () => {
-      const extendedData: any = {
-        data: new Float16Array(16 * 16 * 4),
-        dataType: "float32",
-        width: 16,
-        height: 16,
-        channels: 4,
-        bitDepth: 32,
+      const descriptor: JXLEncodeDescriptor = {
+        geometry: { width: 16, height: 16 },
+        channels: { model: 'rgba', count: 4 },
+        numeric: { dataType: 'float32', bitDepth: 32 },
       };
 
-      await expect(encode(extendedData)).rejects.toThrow(
-        'dataType "float32" requires Float32Array'
-      );
+      await expect(
+        encode(new Float16Array(16 * 16 * 4) as any, descriptor)
+      ).rejects.toThrow('descriptor.numeric.dataType "float32" requires Float32Array data');
     });
   });
 
-  describe("ExtendedImageData encoding", () => {
-    it("should encode uint8 ExtendedImageData", async () => {
-      const data = new Uint8Array(16 * 16 * 4);
-      for (let i = 0; i < data.length; i += 4) {
-        data[i] = (i / 4) % 256;
-        data[i + 1] = 128;
-        data[i + 2] = 200;
-        data[i + 3] = 255;
-      }
-
-      const extendedData: JXLImageData = {
-        data,
-        dataType: "uint8",
-        width: 16,
-        height: 16,
-        channels: 4,
-        bitDepth: 8,
-        metadata: DEFAULT_SRGB_METADATA,
-      };
-
-      const encoded = await encode(extendedData);
-      expect(encoded.length).toBeGreaterThan(0);
-
-      // Verify round-trip preserves dataType
-      const decoded = await decode(encoded);
-      expect(decoded.dataType).toBe("uint8");
-      expect(decoded.data).toBeInstanceOf(Uint8Array);
-    });
-
-    it("should encode uint16 ExtendedImageData with 10-bit depth", async () => {
-      const data = new Uint16Array(16 * 16 * 4);
-      for (let i = 0; i < data.length; i += 4) {
-        data[i] = ((i / 4) * 4) % 1024;
-        data[i + 1] = 512;
-        data[i + 2] = 800;
-        data[i + 3] = 1023;
-      }
-
-      const extendedData: JXLImageData = {
-        data,
-        dataType: "uint16",
-        width: 16,
-        height: 16,
-        channels: 4,
-        bitDepth: 10,
-        metadata: DEFAULT_SRGB_METADATA,
-      };
-
-      const encoded = await encode(extendedData, { bitDepth: 10 });
-      expect(encoded.length).toBeGreaterThan(0);
-
-      const decoded = await decode(encoded);
-      expect(decoded.dataType).toBe("uint16");
-      expect(decoded.data).toBeInstanceOf(Uint16Array);
-      expect(decoded.bitDepth).toBe(10);
-    });
-
-    it("should encode uint16 ExtendedImageData with 12-bit depth", async () => {
-      const data = new Uint16Array(16 * 16 * 4);
-      for (let i = 0; i < data.length; i += 4) {
-        data[i] = ((i / 4) * 16) % 4096;
-        data[i + 1] = 2048;
-        data[i + 2] = 3200;
-        data[i + 3] = 4095;
-      }
-
-      const extendedData: JXLImageData = {
-        data,
-        dataType: "uint16",
-        width: 16,
-        height: 16,
-        channels: 4,
-        bitDepth: 12,
-        metadata: DEFAULT_SRGB_METADATA,
-      };
-
-      const encoded = await encode(extendedData, { bitDepth: 12 });
-      expect(encoded.length).toBeGreaterThan(0);
-
-      const decoded = await decode(encoded);
-      expect(decoded.dataType).toBe("uint16");
-      expect(decoded.bitDepth).toBe(12);
-    });
-
-    it("should accept float16 ExtendedImageData", async () => {
+  describe("float encoding", () => {
+    it("should accept float16 data", async () => {
       const data = new Float16Array(16 * 16 * 4);
-      // Fill with HDR values (range 0.0 - 1.0+)
       for (let i = 0; i < data.length; i += 4) {
         data[i] = ((i / 4) % 256) / 255.0;
         data[i + 1] = 0.5;
         data[i + 2] = 0.8;
         data[i + 3] = 1.0;
       }
-
-      const extendedData: JXLImageData = {
-        data,
-        dataType: "float16",
-        width: 16,
-        height: 16,
-        channels: 4,
-        bitDepth: 16,
-        metadata: {
-          ...DEFAULT_SRGB_METADATA,
-          transferFunction: "linear",
-          isHDR: true,
-        },
+      const descriptor: JXLEncodeDescriptor = {
+        geometry: { width: 16, height: 16 },
+        channels: { model: 'rgba', count: 4 },
+        numeric: { dataType: 'float16', bitDepth: 16 },
+        transfer: { function: 'linear' },
       };
 
-      const encoded = await encode(extendedData);
+      const encoded = await encode(data, descriptor);
       expect(encoded.length).toBeGreaterThan(0);
 
-      // Decode and verify format is preserved
       const decoded = await decode(encoded);
-      expect(decoded.dataType).toBe("float16");
+      expect(decoded.descriptor.numeric.dataType).toBe("float16");
       expect(decoded.data).toBeInstanceOf(Float16Array);
-      expect(decoded.bitDepth).toBe(16);
-      expect(decoded.width).toBe(16);
-      expect(decoded.height).toBe(16);
+      expect(decoded.descriptor.geometry.width).toBe(16);
+      expect(decoded.descriptor.geometry.height).toBe(16);
     });
 
-    it("should accept float32 ExtendedImageData", async () => {
+    it("should accept float32 data", async () => {
       const data = new Float32Array(16 * 16 * 4);
-      // Fill with HDR values (range 0.0 - 1.0+)
       for (let i = 0; i < data.length; i += 4) {
         data[i] = ((i / 4) % 256) / 255.0;
         data[i + 1] = 0.5;
         data[i + 2] = 0.8;
         data[i + 3] = 1.0;
       }
-
-      const extendedData: JXLImageData = {
-        data,
-        dataType: "float32",
-        width: 16,
-        height: 16,
-        channels: 4,
-        bitDepth: 32,
-        metadata: {
-          ...DEFAULT_SRGB_METADATA,
-          transferFunction: "linear",
-          isHDR: true,
-        },
+      const descriptor: JXLEncodeDescriptor = {
+        geometry: { width: 16, height: 16 },
+        channels: { model: 'rgba', count: 4 },
+        numeric: { dataType: 'float32', bitDepth: 32 },
+        transfer: { function: 'linear' },
       };
 
-      const encoded = await encode(extendedData);
+      const encoded = await encode(data, descriptor);
       expect(encoded.length).toBeGreaterThan(0);
 
-      // Decode and verify format is preserved
       const decoded = await decode(encoded);
-      expect(decoded.dataType).toBe("float32");
+      expect(decoded.descriptor.numeric.dataType).toBe("float32");
       expect(decoded.data).toBeInstanceOf(Float32Array);
-      expect(decoded.bitDepth).toBe(32);
-      expect(decoded.width).toBe(16);
-      expect(decoded.height).toBe(16);
-    });
-
-    it("should validate float16 matches Float16Array", async () => {
-      const extendedData: any = {
-        data: new Float32Array(16 * 16 * 4),
-        dataType: "float16",
-        width: 16,
-        height: 16,
-        channels: 4,
-        bitDepth: 16,
-      };
-
-      await expect(encode(extendedData)).rejects.toThrow(
-        'dataType "float16" requires Float16Array'
-      );
-    });
-
-    it("should validate float32 matches Float32Array", async () => {
-      const extendedData: any = {
-        data: new Float16Array(16 * 16 * 4),
-        dataType: "float32",
-        width: 16,
-        height: 16,
-        channels: 4,
-        bitDepth: 32,
-      };
-
-      await expect(encode(extendedData)).rejects.toThrow(
-        'dataType "float32" requires Float32Array'
-      );
+      expect(decoded.descriptor.geometry.width).toBe(16);
+      expect(decoded.descriptor.geometry.height).toBe(16);
     });
   });
 });

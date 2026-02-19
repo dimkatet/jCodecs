@@ -5,10 +5,50 @@
  * worker pools from @jcodecs/avif and @jcodecs/jxl packages.
  */
 import { isMultiThreadSupported } from '@dimkatet/jcodecs-core';
+import type { ImageDescriptor } from '@dimkatet/jcodecs-core';
 import { detectFormat, type ImageFormat } from './format-detection';
 import type { AutoImageData } from './types';
 import type { AutoDecodeOptions, AutoEncodeOptions, AVIFEncodeOptions, JXLEncodeOptions } from './options';
 import { UnsupportedFormatError, CodecNotInstalledError } from './errors';
+
+// ============================================================================
+// Descriptor building helpers (for encode in worker)
+// ============================================================================
+
+function mapColorSpaceToPrimaries(colorSpace?: string): string {
+  switch (colorSpace) {
+    case 'display-p3': return 'displayP3';
+    case 'rec2020': return 'bt2020';
+    default: return 'bt709';
+  }
+}
+
+function buildDescriptorFromImageDescriptor(
+  src: ImageDescriptor,
+  opts: AutoEncodeOptions,
+): { geometry: { width: number; height: number }; channels: { model: string; count: number }; numeric: { dataType: string; bitDepth: number }; color?: { primaries?: string }; transfer?: { function?: string } } {
+  const bitDepth = opts.bitDepth ?? (src.numeric.bitDepth as number);
+  return {
+    geometry: { width: src.geometry.width, height: src.geometry.height },
+    channels: { model: src.channels.model, count: src.channels.count },
+    numeric: { dataType: src.numeric.dataType, bitDepth },
+    color: { primaries: opts.colorSpace ? mapColorSpaceToPrimaries(opts.colorSpace) : src.color?.primaries },
+    transfer: { function: opts.transferFunction ?? src.transfer?.function },
+  };
+}
+
+function buildDescriptorFromImageData(
+  imgData: ImageData,
+  opts: AutoEncodeOptions,
+): { geometry: { width: number; height: number }; channels: { model: string; count: number }; numeric: { dataType: string; bitDepth: number }; color?: { primaries?: string }; transfer?: { function?: string } } {
+  return {
+    geometry: { width: imgData.width, height: imgData.height },
+    channels: { model: 'rgba', count: 4 },
+    numeric: { dataType: 'uint8', bitDepth: 8 },
+    color: { primaries: mapColorSpaceToPrimaries(opts.colorSpace) },
+    transfer: { function: opts.transferFunction ?? 'srgb' },
+  };
+}
 
 // ============================================================================
 // Types
@@ -280,7 +320,7 @@ export async function decodeInWorker(
       data,
       options,
     );
-    return { ...result, metadata: { ...result.metadata, format: 'avif' } } as AutoImageData;
+    return { data: result.data, descriptor: result.descriptor, format: 'avif' };
   }
 
   if (format === 'jxl' && state.pools.jxl && state.modules.jxl) {
@@ -289,7 +329,7 @@ export async function decodeInWorker(
       data,
       options,
     );
-    return { ...result, metadata: { ...result.metadata, format: 'jxl' } } as AutoImageData;
+    return { data: result.data, descriptor: result.descriptor, format: 'jxl' };
   }
 
   throw new CodecNotInstalledError(format);
@@ -302,7 +342,7 @@ export async function decodeInWorker(
  */
 export async function encodeInWorker(
   client: AutoWorkerClient,
-  imageData: AutoImageData | ImageData,
+  input: AutoImageData | ImageData,
   options: AutoEncodeOptions,
 ): Promise<Uint8Array> {
   const state = clientStates.get(client);
@@ -313,19 +353,40 @@ export async function encodeInWorker(
   const { format } = options;
   await ensurePoolInitialized(state, format);
 
+  // Split input into raw data + descriptor
+  let pixelData: Uint8Array | Uint16Array | Float16Array | Float32Array;
+  let descriptor: ReturnType<typeof buildDescriptorFromImageDescriptor>;
+
+  if ('descriptor' in input) {
+    pixelData = input.data;
+    descriptor = buildDescriptorFromImageDescriptor(input.descriptor, options);
+  } else {
+    pixelData = new Uint8Array(input.data.buffer, input.data.byteOffset, input.data.byteLength);
+    descriptor = buildDescriptorFromImageData(input, options);
+  }
+
+  const avifOpts: AVIFEncodeOptions = { quality: options.quality, maxThreads: options.maxThreads, lossless: options.lossless, ...options.avif };
+  const jxlOpts: JXLEncodeOptions = { quality: options.quality, maxThreads: options.maxThreads, lossless: options.lossless, ...options.jxl };
+
   if (format === 'avif' && state.pools.avif && state.modules.avif) {
+    type AvifData = Parameters<typeof state.modules.avif.encodeInWorker>[1];
+    type AvifDesc = Parameters<typeof state.modules.avif.encodeInWorker>[2];
     return state.modules.avif.encodeInWorker(
       state.pools.avif,
-      imageData as Parameters<typeof state.modules.avif.encodeInWorker>[1],
-      options as AVIFEncodeOptions,
+      pixelData as AvifData,
+      descriptor as AvifDesc,
+      avifOpts,
     );
   }
 
   if (format === 'jxl' && state.pools.jxl && state.modules.jxl) {
+    type JxlData = Parameters<typeof state.modules.jxl.encodeInWorker>[1];
+    type JxlDesc = Parameters<typeof state.modules.jxl.encodeInWorker>[2];
     return state.modules.jxl.encodeInWorker(
       state.pools.jxl,
-      imageData as Parameters<typeof state.modules.jxl.encodeInWorker>[1],
-      options as JXLEncodeOptions,
+      pixelData as JxlData,
+      descriptor as JxlDesc,
+      jxlOpts,
     );
   }
 

@@ -69,7 +69,7 @@ export interface AutoEncodeOptions {
   quality?: number;
 
   /**
-   * Output bit depth.
+   * Output bit depth (goes into the descriptor).
    * @default 8
    */
   bitDepth?: 8 | 10 | 12 | 16;
@@ -89,13 +89,13 @@ export interface AutoEncodeOptions {
   lossless?: boolean;
 
   /**
-   * Output color space.
+   * Output color space (maps to descriptor color primaries).
    * @default 'srgb'
    */
   colorSpace?: ColorSpace;
 
   /**
-   * Transfer function (OETF) for HDR content.
+   * Transfer function for HDR content (maps to descriptor transfer function).
    * @default 'srgb'
    */
   transferFunction?: TransferFunctionOption;
@@ -132,6 +132,7 @@ export function mapToAVIFDecodeOptions(opts: AutoDecodeOptions): AVIFDecodeOptio
  */
 export function mapToJXLDecodeOptions(opts: AutoDecodeOptions): JXLDecodeOptions {
   return {
+    bitDepth: opts.bitDepth,
     maxThreads: opts.maxThreads,
     ignoreColorProfile: opts.ignoreColorProfile,
     ...opts.jxl,
@@ -139,31 +140,27 @@ export function mapToJXLDecodeOptions(opts: AutoDecodeOptions): JXLDecodeOptions
 }
 
 /**
- * Map unified encode options to AVIF-specific options
+ * Map unified encode options to AVIF-specific encode options (quality/speed params only,
+ * not descriptor fields like colorSpace/transferFunction/bitDepth).
  */
 export function mapToAVIFEncodeOptions(opts: AutoEncodeOptions): AVIFEncodeOptions {
   return {
     quality: opts.quality,
-    bitDepth: opts.bitDepth as 8 | 10 | 12 | undefined,
     maxThreads: opts.maxThreads,
     lossless: opts.lossless,
-    colorSpace: opts.colorSpace,
-    transferFunction: opts.transferFunction,
     ...opts.avif,
   };
 }
 
 /**
- * Map unified encode options to JXL-specific options
+ * Map unified encode options to JXL-specific encode options (quality/effort params only,
+ * not descriptor fields like colorSpace/transferFunction/bitDepth).
  */
 export function mapToJXLEncodeOptions(opts: AutoEncodeOptions): JXLEncodeOptions {
   return {
     quality: opts.quality,
-    bitDepth: opts.bitDepth,
     maxThreads: opts.maxThreads,
     lossless: opts.lossless,
-    colorSpace: opts.colorSpace,
-    transferFunction: opts.transferFunction,
     ...opts.jxl,
   };
 }

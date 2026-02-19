@@ -3,8 +3,9 @@
 # Multi-stage Dockerfile for building codec WASM modules
 #
 # Usage:
-#   docker build --target avif --output packages/avif/wasm .
-#   docker build --target jxl --output packages/jxl/wasm .
+#   docker build --target core --output packages/core/src/wasm .
+#   docker build --target avif --output packages/avif/src/wasm .
+#   docker build --target jxl --output packages/jxl/src/wasm .
 # =============================================================================
 
 # === BASE: Emscripten + build tools ===
@@ -37,8 +38,30 @@ RUN emcmake cmake /src/libyuv \
     -DBUILD_SHARED_LIBS=OFF \
     && make -j$(nproc) yuv
 
+# === JCODECS CORE: Image Descriptor Library ===
+FROM common AS jcodecs-core
+
+# Copy core library source
+COPY packages/core/src/wasm/descriptor /src/jcodecs-core
+
+# Build core library as static lib
+WORKDIR /build/jcodecs-core
+RUN emcmake cmake /src/jcodecs-core \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_CXX_STANDARD=17 \
+    -G Ninja \
+    && ninja
+
+# Test standalone descriptor module (optional)
+RUN emcmake cmake /src/jcodecs-core \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_CXX_STANDARD=17 \
+    -DBUILD_STANDALONE_DESCRIPTOR=ON \
+    -G Ninja \
+    && ninja jcodecs-descriptor
+
 # === AVIF: libavif + dav1d decoder + aom encoder ===
-FROM common AS avif-build
+FROM jcodecs-core AS avif-build
 
 ARG LIBAVIF_VERSION=v1.3.0
 ARG DAV1D_VERSION=1.5.3
@@ -152,10 +175,17 @@ RUN emcmake cmake /src/avif-wasm \
     -DAOM_LIB="/build/aom/libaom.a" \
     -DAOM_INCLUDE="/src/aom;/build/aom" \
     -DLIBYUV_LIB="/build/libyuv/libyuv.a" \
+    -DJCODECS_CORE_LIB="/build/jcodecs-core/libjcodecs_core.a" \
+    -DJCODECS_CORE_INCLUDE="/src/jcodecs-core" \
     -DBUILD_MT=ON \
     -DBUILD_ENCODER=ON \
     -G Ninja \
     && ninja
+
+# === JCODECS CORE: Output stage (for testing) ===
+FROM scratch AS core
+COPY --from=jcodecs-core /build/jcodecs-core/jcodecs-descriptor.js /
+COPY --from=jcodecs-core /build/jcodecs-core/jcodecs-descriptor.d.ts /
 
 # === AVIF: Output stage (only artifacts) ===
 FROM scratch AS avif
@@ -169,7 +199,7 @@ COPY --from=avif-build /build/avif-wasm/avif_enc_mt.js /
 COPY --from=avif-build /build/avif-wasm/avif_enc_mt.d.ts /
 
 # === JXL: libjxl encoder/decoder ===
-FROM common AS jxl-build
+FROM jcodecs-core AS jxl-build
 
 ARG LIBJXL_VERSION=v0.10.3
 
@@ -218,6 +248,8 @@ RUN emcmake cmake /src/jxl-wasm \
     -DBROTLI_COMMON_LIB="/build/libjxl/third_party/brotli/libbrotlicommon.a" \
     -DLIBJXL_INCLUDE="/src/libjxl/lib/include;/build/libjxl/lib/include" \
     -DLIBYUV_LIB="/build/libyuv/libyuv.a" \
+    -DJCODECS_CORE_LIB="/build/jcodecs-core/libjcodecs_core.a" \
+    -DJCODECS_CORE_INCLUDE="/src/jcodecs-core" \
     -DBUILD_MT=ON \
     -G Ninja \
     && ninja

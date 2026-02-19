@@ -1,15 +1,4 @@
 import type { ProgressCallback } from '@dimkatet/jcodecs-core';
-import type { AVIFMetadata } from './types';
-
-/**
- * Chroma subsampling options
- */
-export type ChromaSubsampling = '4:4:4' | '4:2:2' | '4:2:0' | '4:0:0';
-
-/**
- * Color space options
- */
-export type ColorSpace = 'srgb' | 'display-p3' | 'rec2020';
 
 /**
  * Encoder tuning modes
@@ -17,12 +6,8 @@ export type ColorSpace = 'srgb' | 'display-p3' | 'rec2020';
 export type EncoderTune = 'default' | 'ssim' | 'psnr';
 
 /**
- * Transfer function (OETF) options
- */
-export type TransferFunctionOption = 'srgb' | 'pq' | 'hlg' | 'linear';
-
-/**
- * AVIF encoding options
+ * AVIF encoding options — pure encoding parameters only.
+ * Image description (dimensions, color, chroma, bit depth) is in AVIFEncodeDescriptor.
  */
 export interface AVIFEncodeOptions {
   /**
@@ -45,40 +30,17 @@ export interface AVIFEncodeOptions {
   speed?: number;
 
   /**
-   * Chroma subsampling.
-   * - '4:4:4': No subsampling (best quality, larger size)
-   * - '4:2:2': Horizontal subsampling
-   * - '4:2:0': Both horizontal and vertical subsampling (most common)
-   * - '4:0:0': Grayscale (no chroma)
-   * @default '4:2:0'
+   * Encoder tuning mode.
+   * - 'default': Balanced quality/speed
+   * - 'ssim': Optimize for SSIM metric
+   * - 'psnr': Optimize for PSNR metric
+   * @default 'default'
    */
-  chromaSubsampling?: ChromaSubsampling;
-
-  /**
-   * Output bit depth.
-   * @default 8
-   */
-  bitDepth?: 8 | 10 | 12;
-
-  /**
-   * Output color space.
-   * @default 'srgb'
-   */
-  colorSpace?: ColorSpace;
-
-  /**
-   * Transfer function (OETF) for HDR content.
-   * - 'srgb': Standard sRGB gamma (~2.2)
-   * - 'pq': Perceptual Quantizer (HDR10, Dolby Vision)
-   * - 'hlg': Hybrid Log-Gamma (broadcast HDR)
-   * - 'linear': Linear light (for compositing)
-   * @default 'srgb'
-   */
-  transferFunction?: TransferFunctionOption;
+  tune?: EncoderTune;
 
   /**
    * Enable lossless encoding.
-   * When true, quality setting is ignored and chroma subsampling is set to 4:4:4.
+   * When true, quality setting is ignored and chroma subsampling is forced to 4:4:4.
    * @default false
    */
   lossless?: boolean;
@@ -91,24 +53,22 @@ export interface AVIFEncodeOptions {
   maxThreads?: number;
 
   /**
-   * Encoder tuning mode.
-   * - 'default': Balanced quality/speed
-   * - 'ssim': Optimize for SSIM metric
-   * - 'psnr': Optimize for PSNR metric
-   * @default 'default'
-   */
-  tune?: EncoderTune;
-
-  /**
-   * Image metadata to embed in the output.
-   */
-  metadata?: Partial<AVIFMetadata>;
-
-  /**
    * Progress callback for tracking encoding progress.
    */
   onProgress?: ProgressCallback;
 }
+
+/**
+ * Default encode options
+ */
+export const DEFAULT_ENCODE_OPTIONS: Required<Omit<AVIFEncodeOptions, 'onProgress'>> = {
+  quality: 75,
+  qualityAlpha: 100,
+  speed: 6,
+  tune: 'default',
+  lossless: false,
+  maxThreads: 0,
+};
 
 /**
  * AVIF decoding options
@@ -140,24 +100,6 @@ export interface AVIFDecodeOptions {
    */
   maxThreads?: number;
 }
-
-/**
- * Default encode options
- */
-export const DEFAULT_ENCODE_OPTIONS: Required<
-  Omit<AVIFEncodeOptions, 'metadata' | 'onProgress'>
-> = {
-  quality: 75,
-  qualityAlpha: 100,
-  speed: 6,
-  chromaSubsampling: '4:2:0',
-  bitDepth: 8,
-  colorSpace: 'srgb',
-  transferFunction: 'srgb',
-  lossless: false,
-  maxThreads: 0,
-  tune: 'default',
-};
 
 /**
  * Default decode options

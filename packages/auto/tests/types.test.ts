@@ -1,11 +1,8 @@
-import { describe, it, expect, expectTypeOf } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   isAVIFImageData,
   isJXLImageData,
   type AutoImageData,
-  type AutoMetadata,
-  type AVIFAutoMetadata,
-  type JXLAutoMetadata,
 } from '../src/types';
 import { createMockAutoImageData } from './__mocks__/fixtures';
 
@@ -21,12 +18,10 @@ describe('type guards', () => {
       expect(isAVIFImageData(data)).toBe(false);
     });
 
-    it('narrows type correctly', () => {
+    it('narrows format type correctly', () => {
       const data = createMockAutoImageData('avif');
       if (isAVIFImageData(data)) {
-        // TypeScript should narrow the type here
         expect(data.format).toBe('avif');
-        expect(data.metadata.format).toBe('avif');
       }
     });
   });
@@ -42,76 +37,54 @@ describe('type guards', () => {
       expect(isJXLImageData(data)).toBe(false);
     });
 
-    it('narrows type correctly', () => {
+    it('narrows format type correctly', () => {
       const data = createMockAutoImageData('jxl');
       if (isJXLImageData(data)) {
-        // TypeScript should narrow the type here
         expect(data.format).toBe('jxl');
-        expect(data.metadata.format).toBe('jxl');
       }
     });
   });
 });
 
-describe('type inference', () => {
-  it('AutoMetadata is discriminated union', () => {
-    // Test that we can use format to discriminate
-    const avifMeta: AutoMetadata = {
-      format: 'avif',
-      colorPrimaries: 'bt709',
-      transferFunction: 'srgb',
-      fullRange: true,
-      maxCLL: 0,
-      maxPALL: 0,
-      isHDR: false,
-      matrixCoefficients: 'bt709',
-    };
-
-    const jxlMeta: AutoMetadata = {
-      format: 'jxl',
-      colorPrimaries: 'bt709',
-      transferFunction: 'srgb',
-      fullRange: true,
-      maxCLL: 0,
-      maxPALL: 0,
-      isHDR: false,
-      isAnimated: false,
-      frameCount: 1,
-    };
-
-    expect(avifMeta.format).toBe('avif');
-    expect(jxlMeta.format).toBe('jxl');
-  });
-
-  it('metadata.format narrows type', () => {
-    const metadata: AutoMetadata = createMockAutoImageData('avif').metadata;
-
-    if (metadata.format === 'avif') {
-      // Should have AVIF-specific fields
-      expectTypeOf(metadata).toMatchTypeOf<AVIFAutoMetadata>();
-    }
-
-    const jxlMetadata: AutoMetadata = createMockAutoImageData('jxl').metadata;
-    if (jxlMetadata.format === 'jxl') {
-      // Should have JXL-specific fields
-      expectTypeOf(jxlMetadata).toMatchTypeOf<JXLAutoMetadata>();
-    }
-  });
-
-  it('AVIF metadata has matrixCoefficients', () => {
+describe('AutoImageData structure', () => {
+  it('has data, descriptor, and format fields', () => {
     const data = createMockAutoImageData('avif');
-    if (isAVIFImageData(data)) {
-      // matrixCoefficients is AVIF-specific
-      expect(data.metadata).toHaveProperty('matrixCoefficients');
-    }
+
+    expect(data).toHaveProperty('data');
+    expect(data).toHaveProperty('descriptor');
+    expect(data).toHaveProperty('format', 'avif');
   });
 
-  it('JXL metadata has isAnimated, frameCount', () => {
-    const data = createMockAutoImageData('jxl');
-    if (isJXLImageData(data)) {
-      // isAnimated and frameCount are JXL-specific
-      expect(data.metadata).toHaveProperty('isAnimated');
-      expect(data.metadata).toHaveProperty('frameCount');
-    }
+  it('descriptor contains geometry with dimensions', () => {
+    const data = createMockAutoImageData('avif', { width: 100, height: 200 });
+
+    expect(data.descriptor.geometry).toEqual({ width: 100, height: 200 });
+  });
+
+  it('descriptor.numeric reflects specified bitDepth and dataType', () => {
+    const data = createMockAutoImageData('jxl', { bitDepth: 10, dataType: 'uint16' });
+
+    expect(data.descriptor.numeric.bitDepth).toBe(10);
+    expect(data.descriptor.numeric.dataType).toBe('uint16');
+  });
+
+  it('data is a TypedArray matching dataType', () => {
+    const uint8Data = createMockAutoImageData('avif', { dataType: 'uint8' });
+    expect(uint8Data.data).toBeInstanceOf(Uint8Array);
+
+    const uint16Data = createMockAutoImageData('jxl', { dataType: 'uint16' });
+    expect(uint16Data.data).toBeInstanceOf(Uint16Array);
+  });
+});
+
+describe('type compatibility', () => {
+  it('AutoImageData with format avif satisfies the interface', () => {
+    const data: AutoImageData = createMockAutoImageData('avif');
+    expect(data.format).toBe('avif');
+  });
+
+  it('AutoImageData with format jxl satisfies the interface', () => {
+    const data: AutoImageData = createMockAutoImageData('jxl');
+    expect(data.format).toBe('jxl');
   });
 });

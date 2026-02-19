@@ -25,7 +25,8 @@ export interface CodecAdapter {
   ): Promise<ImageData>;
 
   encode(
-    input: unknown,
+    data: unknown,
+    descriptor: unknown,
     options?: unknown,
     config?: { jsUrl?: string },
   ): Promise<Uint8Array>;

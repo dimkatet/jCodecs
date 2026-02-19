@@ -4,7 +4,8 @@
 
 import { detectFormat, type ImageFormat } from './format-detection';
 import { getCodec, ensureCodecsRegistered } from './codec-registry';
-import type { AutoImageData, AutoImageInfo, AutoMetadata, AutoDataType } from './types';
+import type { AutoImageData, AutoImageInfo } from './types';
+import type { ImageDescriptor } from '@dimkatet/jcodecs-core';
 import {
   mapToAVIFDecodeOptions,
   mapToJXLDecodeOptions,
@@ -46,23 +47,13 @@ export async function decode(
 
   const result = (await codec.decode(data, codecOptions)) as {
     data: Uint8Array | Uint16Array | Float16Array | Float32Array;
-    dataType: string;
-    bitDepth: number;
-    width: number;
-    height: number;
-    channels: number;
-    metadata: Record<string, unknown>;
+    descriptor: ImageDescriptor;
   };
 
   return {
     data: result.data,
-    dataType: result.dataType as AutoDataType,
-    bitDepth: result.bitDepth,
-    width: result.width,
-    height: result.height,
-    channels: result.channels,
+    descriptor: result.descriptor,
     format,
-    metadata: { format, ...result.metadata } as AutoMetadata,
   };
 }
 
@@ -119,21 +110,10 @@ export async function getImageInfo(
   }
 
   const codec = await getCodec(format);
-  const info = (await codec.getImageInfo(data)) as {
-    width: number;
-    height: number;
-    bitDepth: number;
-    channels: number;
-    metadata: Record<string, unknown>;
-  };
+  const descriptor = (await codec.getImageInfo(data)) as ImageDescriptor;
 
   return {
-    width: info.width,
-    height: info.height,
-    bitDepth: info.bitDepth,
-    channels: info.channels,
+    descriptor,
     format,
-    metadata: { format, ...info.metadata } as AutoMetadata,
   };
 }
-
