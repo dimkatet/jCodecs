@@ -2,8 +2,8 @@
  * Test fixtures and mock data factories
  */
 
-import type { AutoImageData, AutoMetadata } from '../../src/types';
-import { MOCK_AVIF_METADATA, MOCK_JXL_METADATA } from './codec-adapter';
+import type { AutoImageData } from '../../src/types';
+import { MOCK_DESCRIPTOR } from './codec-adapter';
 
 // ============================================================================
 // Magic bytes samples
@@ -78,7 +78,8 @@ export function createMockImageData(width = 10, height = 10): ImageData {
 }
 
 /**
- * Create mock AutoImageData for testing
+ * Create mock AutoImageData for testing.
+ * Returns { data, descriptor, format } per the new ImageDescriptor API.
  */
 export function createMockAutoImageData(
   format: 'avif' | 'jxl',
@@ -94,11 +95,8 @@ export function createMockAutoImageData(
   const bitDepth = options?.bitDepth ?? 8;
   const dataType = options?.dataType ?? 'uint8';
 
-  const baseMetadata = format === 'avif' ? MOCK_AVIF_METADATA : MOCK_JXL_METADATA;
-  const metadata = { format, ...baseMetadata } as AutoMetadata;
-
-  let data: Uint8Array | Uint16Array | Float32Array;
   const pixelCount = width * height * 4;
+  let data: Uint8Array | Uint16Array | Float32Array;
 
   switch (dataType) {
     case 'uint16':
@@ -114,13 +112,12 @@ export function createMockAutoImageData(
 
   return {
     data,
-    dataType,
-    bitDepth,
-    width,
-    height,
-    channels: 4,
+    descriptor: {
+      ...MOCK_DESCRIPTOR,
+      geometry: { width, height },
+      numeric: { ...MOCK_DESCRIPTOR.numeric, dataType, bitDepth },
+    },
     format,
-    metadata,
   } as AutoImageData;
 }
 

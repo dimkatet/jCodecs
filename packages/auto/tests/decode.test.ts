@@ -127,29 +127,20 @@ describe('decode', () => {
   });
 
   describe('result structure', () => {
-    it('returns AutoImageData with format field', async () => {
+    it('returns AutoImageData with format and descriptor', async () => {
       const result = await decode(AVIF_SAMPLE);
 
       expect(result).toHaveProperty('format', 'avif');
       expect(result).toHaveProperty('data');
-      expect(result).toHaveProperty('width');
-      expect(result).toHaveProperty('height');
-      expect(result).toHaveProperty('dataType');
-      expect(result).toHaveProperty('bitDepth');
-      expect(result).toHaveProperty('channels');
-      expect(result).toHaveProperty('metadata');
+      expect(result).toHaveProperty('descriptor');
+      expect(result.descriptor).toHaveProperty('geometry');
+      expect(result.descriptor).toHaveProperty('numeric');
     });
 
-    it('metadata includes format discriminator', async () => {
+    it('data is a TypedArray matching descriptor.numeric.dataType', async () => {
       const result = await decode(AVIF_SAMPLE);
 
-      expect(result.metadata).toHaveProperty('format', 'avif');
-    });
-
-    it('data is correct TypedArray for dataType', async () => {
-      const result = await decode(AVIF_SAMPLE);
-
-      expect(result.dataType).toBe('uint8');
+      expect(result.descriptor.numeric.dataType).toBe('uint8');
       expect(result.data).toBeInstanceOf(Uint8Array);
     });
   });
@@ -189,23 +180,23 @@ describe('getImageInfo', () => {
     vi.clearAllMocks();
   });
 
-  it('returns dimensions without full decode', async () => {
+  it('returns descriptor and format without full decode', async () => {
     const result = await getImageInfo(AVIF_SAMPLE);
 
-    expect(result).toHaveProperty('width');
-    expect(result).toHaveProperty('height');
-    expect(result).toHaveProperty('bitDepth');
-    expect(result).toHaveProperty('channels');
+    expect(result).toHaveProperty('descriptor');
+    expect(result).toHaveProperty('format', 'avif');
+    expect(result.descriptor).toHaveProperty('geometry');
+    expect(result.descriptor.geometry).toHaveProperty('width');
+    expect(result.descriptor.geometry).toHaveProperty('height');
     expect(mockAvifAdapter.getImageInfo).toHaveBeenCalled();
     // decode should NOT be called
     expect(mockAvifAdapter.decode).not.toHaveBeenCalled();
   });
 
-  it('returns metadata with format', async () => {
+  it('format field identifies the detected format', async () => {
     const result = await getImageInfo(AVIF_SAMPLE);
 
-    expect(result).toHaveProperty('format', 'avif');
-    expect(result.metadata).toHaveProperty('format', 'avif');
+    expect(result.format).toBe('avif');
   });
 
   it('throws for unknown format', async () => {

@@ -14,26 +14,13 @@ export const AVIF_MAGIC_BYTES = new Uint8Array([
 
 export const JXL_MAGIC_BYTES = new Uint8Array([0xff, 0x0a]);
 
-// Default mock metadata
-export const MOCK_AVIF_METADATA = {
-  colorPrimaries: 'bt709',
-  transferFunction: 'srgb',
-  fullRange: true,
-  maxCLL: 0,
-  maxPALL: 0,
-  isHDR: false,
-  matrixCoefficients: 'bt709',
-};
-
-export const MOCK_JXL_METADATA = {
-  colorPrimaries: 'bt709',
-  transferFunction: 'srgb',
-  fullRange: true,
-  maxCLL: 0,
-  maxPALL: 0,
-  isHDR: false,
-  isAnimated: false,
-  frameCount: 1,
+// Default mock ImageDescriptor (partial — enough for test assertions)
+export const MOCK_DESCRIPTOR = {
+  geometry: { width: 10, height: 10 },
+  channels: { model: 'rgba', count: 4 },
+  numeric: { sampleType: 'uint', dataType: 'uint8', bitDepth: 8 },
+  color: { primaries: 'bt709' },
+  transfer: { function: 'srgb' },
 };
 
 export interface MockCodecAdapter extends CodecAdapter {
@@ -52,18 +39,13 @@ export interface MockCodecAdapter extends CodecAdapter {
  * Create a mock codec adapter for testing
  */
 export function createMockCodecAdapter(format: 'avif' | 'jxl'): MockCodecAdapter {
-  const metadata = format === 'avif' ? MOCK_AVIF_METADATA : MOCK_JXL_METADATA;
   const magicBytes = format === 'avif' ? AVIF_MAGIC_BYTES : JXL_MAGIC_BYTES;
 
   return {
+    // decode returns { data, descriptor } in the new ImageDescriptor API
     decode: vi.fn().mockResolvedValue({
       data: new Uint8Array(10 * 10 * 4), // 10x10 RGBA
-      dataType: 'uint8',
-      bitDepth: 8,
-      width: 10,
-      height: 10,
-      channels: 4,
-      metadata: { ...metadata },
+      descriptor: { ...MOCK_DESCRIPTOR },
     }),
 
     decodeToImageData: vi.fn().mockResolvedValue(
@@ -72,17 +54,13 @@ export function createMockCodecAdapter(format: 'avif' | 'jxl'): MockCodecAdapter
         : { data: new Uint8ClampedArray(10 * 10 * 4), width: 10, height: 10, colorSpace: 'srgb' }
     ),
 
+    // encode(data, descriptor, options) — 3 args in new API
     encode: vi.fn().mockResolvedValue(new Uint8Array([...magicBytes, 0x00, 0x00])),
 
     encodeSimple: vi.fn().mockResolvedValue(new Uint8Array([...magicBytes, 0x00, 0x00])),
 
-    getImageInfo: vi.fn().mockResolvedValue({
-      width: 10,
-      height: 10,
-      bitDepth: 8,
-      channels: 4,
-      metadata: { ...metadata },
-    }),
+    // getImageInfo returns ImageDescriptor directly (auto wraps it in { descriptor, format })
+    getImageInfo: vi.fn().mockResolvedValue({ ...MOCK_DESCRIPTOR }),
 
     initDecoder: vi.fn().mockResolvedValue(undefined),
     initEncoder: vi.fn().mockResolvedValue(undefined),

@@ -73,16 +73,14 @@ describe('encode', () => {
   });
 
   describe('input handling', () => {
-    it('accepts ImageData input', async () => {
+    it('accepts ImageData input — calls codec.encode(data, descriptor, options)', async () => {
       const imageData = createMockImageData();
       await encode(imageData, { format: 'avif' });
 
+      // New API: encode(rawPixelData, descriptor, codecOptions)
       expect(mockAvifAdapter.encode).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.any(Uint8ClampedArray),
-          width: 10,
-          height: 10,
-        }),
+        expect.any(Uint8Array),
+        expect.objectContaining({ geometry: { width: 10, height: 10 } }),
         expect.any(Object)
       );
     });
@@ -94,54 +92,60 @@ describe('encode', () => {
       expect(mockJxlAdapter.encode).toHaveBeenCalled();
     });
 
-    it('strips format field from AutoImageData for codec', async () => {
+    it('descriptor passed to codec does not include format field', async () => {
       const autoImageData = createMockAutoImageData('avif');
       await encode(autoImageData, { format: 'jxl' });
 
-      // The codec should not receive the 'format' field
-      const callArgs = mockJxlAdapter.encode.mock.calls[0][0];
-      expect(callArgs).not.toHaveProperty('format');
+      // descriptor is the 2nd argument to codec.encode
+      const [, descriptorArg] = mockJxlAdapter.encode.mock.calls[0];
+      expect(descriptorArg).not.toHaveProperty('format');
     });
   });
 
   describe('options', () => {
-    it('applies quality option', async () => {
+    it('applies quality option (goes into codec options, 3rd arg)', async () => {
       const imageData = createMockImageData();
       await encode(imageData, { format: 'avif', quality: 90 });
 
       expect(mockAvifAdapter.encode).toHaveBeenCalledWith(
+        expect.any(Uint8Array),
         expect.any(Object),
         expect.objectContaining({ quality: 90 })
       );
     });
 
-    it('applies bitDepth option', async () => {
-      const imageData = createMockImageData();
-      await encode(imageData, { format: 'avif', bitDepth: 10 });
+    it('applies bitDepth option (goes into descriptor, 2nd arg)', async () => {
+      // Use AutoImageData so bitDepth is not clamped (ImageData is always 8-bit)
+      const autoImageData = createMockAutoImageData('avif');
+      await encode(autoImageData, { format: 'jxl', bitDepth: 10 });
 
-      expect(mockAvifAdapter.encode).toHaveBeenCalledWith(
-        expect.any(Object),
-        expect.objectContaining({ bitDepth: 10 })
+      expect(mockJxlAdapter.encode).toHaveBeenCalledWith(
+        expect.any(Uint8Array),
+        expect.objectContaining({ numeric: expect.objectContaining({ bitDepth: 10 }) }),
+        expect.any(Object)
       );
     });
 
-    it('applies lossless option', async () => {
+    it('applies lossless option (goes into codec options, 3rd arg)', async () => {
       const imageData = createMockImageData();
       await encode(imageData, { format: 'jxl', lossless: true });
 
       expect(mockJxlAdapter.encode).toHaveBeenCalledWith(
+        expect.any(Uint8Array),
         expect.any(Object),
         expect.objectContaining({ lossless: true })
       );
     });
 
-    it('applies colorSpace option', async () => {
+    it('applies colorSpace option (maps to descriptor.color.primaries, 2nd arg)', async () => {
       const imageData = createMockImageData();
       await encode(imageData, { format: 'avif', colorSpace: 'display-p3' });
 
+      // 'display-p3' maps to ImageDescriptor primaries 'displayP3'
       expect(mockAvifAdapter.encode).toHaveBeenCalledWith(
-        expect.any(Object),
-        expect.objectContaining({ colorSpace: 'display-p3' })
+        expect.any(Uint8Array),
+        expect.objectContaining({ color: { primaries: 'displayP3' } }),
+        expect.any(Object)
       );
     });
 
@@ -150,10 +154,11 @@ describe('encode', () => {
       await encode(imageData, {
         format: 'avif',
         quality: 50,
-        avif: { quality: 95 }, // Override
+        avif: { quality: 95 }, // Override via format-specific key
       });
 
       expect(mockAvifAdapter.encode).toHaveBeenCalledWith(
+        expect.any(Uint8Array),
         expect.any(Object),
         expect.objectContaining({ quality: 95 })
       );
@@ -245,19 +250,21 @@ describe('transcode', () => {
     expect(mockAvifAdapter.encode).toHaveBeenCalled();
   });
 
-  it('preserves quality settings', async () => {
+  it('preserves quality settings (goes into codec options, 3rd arg)', async () => {
     await transcode(AVIF_SAMPLE, 'jxl', { quality: 90 });
 
     expect(mockJxlAdapter.encode).toHaveBeenCalledWith(
+      expect.any(Uint8Array),
       expect.any(Object),
       expect.objectContaining({ quality: 90 })
     );
   });
 
-  it('handles lossless transcode', async () => {
+  it('handles lossless transcode (goes into codec options, 3rd arg)', async () => {
     await transcode(AVIF_SAMPLE, 'jxl', { lossless: true });
 
     expect(mockJxlAdapter.encode).toHaveBeenCalledWith(
+      expect.any(Uint8Array),
       expect.any(Object),
       expect.objectContaining({ lossless: true })
     );
