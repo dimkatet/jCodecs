@@ -51,22 +51,6 @@ export interface ExtendedImageData<
 }
 
 // ============================================================================
-// Image info (without pixel data)
-// ============================================================================
-
-/**
- * Image info without pixel data
- * @template TMeta - Codec-specific metadata type
- */
-export interface ImageInfo<TMeta = unknown> {
-  width: number;
-  height: number;
-  bitDepth: number;
-  channels: number;
-  metadata: TMeta;
-}
-
-// ============================================================================
 // Utilities
 // ============================================================================
 

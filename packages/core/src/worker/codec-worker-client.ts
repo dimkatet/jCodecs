@@ -6,8 +6,8 @@
  */
 
 import { CodecWorkerHandlers, InitPayloadType } from "./protocol";
-import { WorkerPool } from "./worker-pool";
-import type { WorkerTask } from "./worker-pool";
+import { WorkerPool } from "./pool";
+import type { WorkerTask } from "./pool";
 
 export interface CodecWorkerClientConfig<P = unknown> {
   /** URL to the worker script */
