@@ -16,5 +16,5 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   treeshake: true,
-  noExternal: ['@dimkatet/jcodecs-core'],
+  noExternal: ['@dimkatet/jcodecs-core', 'valibot'],
 });

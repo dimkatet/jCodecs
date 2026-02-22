@@ -1,5 +1,13 @@
 # @dimkatet/jcodecs-avif
 
+## 0.6.1
+
+### Patch Changes
+
+- Fix production worker: bundle `valibot` into `dist/worker.js` via `noExternal` in
+  tsup config. Module workers with bare imports fail in production Vite builds
+  because browsers cannot resolve bare specifiers outside a dev server.
+
 ## 0.6.0
 
 ### Minor Changes

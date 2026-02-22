@@ -1,5 +1,13 @@
 # @dimkatet/jcodecs-jxl
 
+## 0.3.1
+
+### Patch Changes
+
+- Fix production worker: bundle `valibot` into `dist/worker.js` via `noExternal` in
+  tsup config. Module workers with bare imports fail in production Vite builds
+  because browsers cannot resolve bare specifiers outside a dev server.
+
 ## 0.3.0
 
 ### Minor Changes
