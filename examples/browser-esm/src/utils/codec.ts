@@ -1,43 +1,100 @@
 /**
  * Codec utilities - abstraction layer for encoding/decoding
- * Switches between Direct API and Worker Pool API based on config
+ * Uses @jcodecs/auto for unified API across all formats
  */
 
 import type {
-  AVIFEncodeOptions,
-  AVIFImageData,
-  AVIFWorkerClient,
-  ExtendedImageData,
-} from '@dimkatet/jcodecs-avif';
+  AutoImageData,
+  AutoEncodeOptions,
+  AutoWorkerClient,
+  ImageFormat,
+  ImageDescriptor,
+} from '@dimkatet/jcodecs-auto';
 import {
-  initEncoder as initAvifEncoder,
-  initDecoder as initAvifDecoder,
-  decode as decodeAvif,
-  encode as encodeAvif,
-  createWorkerPool as createAvifWorkerPool,
-  decodeInWorker as decodeAvifInWorker,
-  encodeInWorker as encodeAvifInWorker,
-} from '@dimkatet/jcodecs-avif';
-import {
-  initDecoder as initJxlDecoder,
-  initEncoder as initJxlEncoder,
-  decode as decodeJxl,
-  encode as encodeJxl,
-  type JXLEncodeOptions,
-} from '@dimkatet/jcodecs-jxl';
+  decode as autoDecode,
+  encode as autoEncode,
+  detectFormat,
+  createWorkerPool,
+  decodeInWorker,
+  encodeInWorker,
+} from '@dimkatet/jcodecs-auto';
 
 import {
   API_MODE,
   WORKER_CONFIG,
-  DIRECT_CONFIG,
   THREAD_CONFIG,
 } from '../config/api-mode';
 
-type WorkerPool = AVIFWorkerClient;
+// Worker pool (only initialized if API_MODE = 'worker')
+let workerPool: AutoWorkerClient | null = null;
 
-// Worker pools (only initialized if API_MODE = 'worker')
-let decodeWorkerPool: WorkerPool | null = null;
-let encodeWorkerPool: WorkerPool | null = null;
+// CSS color space names → CID primaries
+const COLOR_SPACE_TO_PRIMARIES: Record<string, string> = {
+  srgb: 'bt709',
+  'display-p3': 'displayP3',
+  rec2020: 'bt2020',
+  bt709: 'bt709',
+};
+
+// Chroma subsampling: colon notation → CID notation
+const CHROMA_SUBSAMPLING_MAP: Record<string, string> = {
+  '4:4:4': '444',
+  '4:2:2': '422',
+  '4:2:0': '420',
+  '4:0:0': '400',
+};
+
+/**
+ * Apply encoding options to a cloned descriptor.
+ * colorSpace/bitDepth/transferFunction/chromaSubsampling are descriptor fields.
+ */
+function applyOptionsToDescriptor(
+  descriptor: ImageDescriptor,
+  options: Record<string, unknown>,
+): ImageDescriptor {
+  const desc: ImageDescriptor = {
+    ...descriptor,
+    geometry: { ...descriptor.geometry },
+    channels: { ...descriptor.channels },
+    numeric: { ...descriptor.numeric },
+    color: descriptor.color ? { ...descriptor.color } : undefined,
+    transfer: descriptor.transfer ? { ...descriptor.transfer } : undefined,
+    sampling: descriptor.sampling ? { ...descriptor.sampling } : undefined,
+  };
+
+  // bitDepth → numeric.bitDepth + numeric.dataType
+  if (options.bitDepth != null) {
+    const bitDepth = options.bitDepth as number;
+    desc.numeric = {
+      ...desc.numeric,
+      bitDepth,
+      dataType: (bitDepth <= 8 ? 'uint8' : 'uint16') as any,
+    };
+  }
+
+  // colorSpace (CSS name) → color.primaries (CID name)
+  if (options.colorSpace != null) {
+    const primaries = COLOR_SPACE_TO_PRIMARIES[options.colorSpace as string];
+    if (primaries) {
+      desc.color = { ...desc.color, primaries: primaries as any };
+    }
+  }
+
+  // transferFunction → transfer.function
+  if (options.transferFunction != null) {
+    desc.transfer = { ...desc.transfer, function: options.transferFunction as any };
+  }
+
+  // chromaSubsampling (colon notation) → sampling.chromaSubsampling (CID notation)
+  if (options.chromaSubsampling != null) {
+    const chroma =
+      CHROMA_SUBSAMPLING_MAP[options.chromaSubsampling as string] ??
+      options.chromaSubsampling;
+    desc.sampling = { ...desc.sampling, chromaSubsampling: chroma as any };
+  }
+
+  return desc;
+}
 
 /**
  * Initialize codecs based on API_MODE
@@ -45,99 +102,85 @@ let encodeWorkerPool: WorkerPool | null = null;
 export async function initializeCodecs(): Promise<void> {
   if (API_MODE === 'worker') {
     console.log('[Codec] Initializing Worker Pool API...');
-    [decodeWorkerPool, encodeWorkerPool] = await Promise.all([
-      createAvifWorkerPool({ ...WORKER_CONFIG, type: 'decoder' }),
-      createAvifWorkerPool({
-        ...WORKER_CONFIG,
-        type: 'encoder',
-        lazyInit: true,
-      }),
-    ]);
-    console.log('[Codec] Worker pools ready');
+    workerPool = await createWorkerPool({
+      ...WORKER_CONFIG,
+      type: 'both',
+    });
+    console.log('[Codec] Worker pool ready');
   } else {
     console.log('[Codec] Using Direct API');
-    // Direct API doesn't need explicit initialization
-    // (it auto-initializes on first use)
   }
 }
 
 /**
- * Decode image based on format
+ * Decode image with auto-detection or specified format
  */
 export async function decode(
   data: Uint8Array,
-  format: string
-): Promise<ExtendedImageData> {
-  const options = { maxThreads: THREAD_CONFIG.maxThreads };
-
-  if (API_MODE === 'worker') {
-    if (!decodeWorkerPool) {
-      throw new Error('Worker pool not initialized');
-    }
-    if (format === 'avif') {
-      return await decodeAvifInWorker(decodeWorkerPool, data, options);
-    } else if (format === 'jxl') {
-      // TODO: JXL worker support when available
-      throw new Error('JXL worker API not yet implemented');
-    }
-  } else {
-    // Direct API
-    if (format === 'avif') {
-      return await decodeAvif(data, options, DIRECT_CONFIG);
-    } else if (format === 'jxl') {
-      return await decodeJxl(data, options, DIRECT_CONFIG);
-    }
-  }
-
-  throw new Error(`Unsupported format: ${format}`);
-}
-
-/**
- * Encode image based on format
- */
-export async function encode(
-  imageData: ExtendedImageData,
-  format: string,
-  options: AVIFEncodeOptions | JXLEncodeOptions
-): Promise<Uint8Array> {
-  const encodeOptions = {
-    ...options,
+  format?: string,
+): Promise<AutoImageData> {
+  const options = {
+    format: format as ImageFormat | undefined,
     maxThreads: THREAD_CONFIG.maxThreads,
   };
 
   if (API_MODE === 'worker') {
-    if (!encodeWorkerPool) {
+    if (!workerPool) {
       throw new Error('Worker pool not initialized');
     }
-    if (format === 'avif') {
-      return await encodeAvifInWorker(
-        encodeWorkerPool,
-        imageData as AVIFImageData,
-        encodeOptions as AVIFEncodeOptions
-      );
-    } else if (format === 'jxl') {
-      // TODO: JXL worker support when available
-      throw new Error('JXL worker API not yet implemented');
-    }
-  } else {
-    // Direct API
-    if (format === 'avif') {
-      return await encodeAvif(
-        imageData as AVIFImageData,
-        encodeOptions as AVIFEncodeOptions,
-        DIRECT_CONFIG
-      );
-    } else if (format === 'jxl') {
-      return await encodeJxl(
-        imageData,
-        encodeOptions as JXLEncodeOptions,
-        DIRECT_CONFIG
-      );
-    }
+    return await decodeInWorker(workerPool, data, options);
   }
 
-  throw new Error(`Unsupported format: ${format}`);
+  return await autoDecode(data, options);
 }
+
+/**
+ * Encode image to specified format
+ */
+export async function encode(
+  imageData: AutoImageData,
+  format: string,
+  options: Record<string, unknown>,
+): Promise<Uint8Array> {
+  // Apply descriptor-level options (bitDepth, colorSpace, transferFunction, chromaSubsampling)
+  const modifiedDescriptor = applyOptionsToDescriptor(imageData.descriptor, options);
+  const modifiedImageData: AutoImageData = { ...imageData, descriptor: modifiedDescriptor };
+
+  const encodeOptions: AutoEncodeOptions = {
+    format: format as 'avif' | 'jxl' | 'exr',
+    quality: options.quality as number | undefined,
+    lossless: options.lossless as boolean | undefined,
+    maxThreads: THREAD_CONFIG.maxThreads,
+    // Format-specific codec options
+    ...(format === 'avif' && options.speed != null
+      ? { avif: { speed: options.speed as number } }
+      : {}),
+    ...(format === 'jxl'
+      ? {
+          jxl: {
+            ...(options.effort != null ? { effort: options.effort as number } : {}),
+            ...(options.progressive != null
+              ? { progressive: options.progressive as boolean }
+              : {}),
+          },
+        }
+      : {}),
+  };
+
+  if (API_MODE === 'worker') {
+    if (!workerPool) {
+      throw new Error('Worker pool not initialized');
+    }
+    return await encodeInWorker(workerPool, modifiedImageData, encodeOptions);
+  }
+
+  return await autoEncode(modifiedImageData, encodeOptions);
+}
+
+/**
+ * Detect format from buffer
+ */
+export { detectFormat };
 
 /**
  * Get current API mode (for UI display)

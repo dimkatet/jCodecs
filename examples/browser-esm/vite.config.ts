@@ -12,6 +12,13 @@ export default defineConfig({
     }
   },
 
+  preview: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp'
+    }
+  },
+
   optimizeDeps: {
     exclude: ["@dimkatet/jcodecs-avif", "@dimkatet/jcodecs-jxl"],
   },
