@@ -1,157 +1,153 @@
-# @jcodecs/auto
+# @dimkatet/jcodecs-auto
 
-Auto-detect image format and unified codec API for jCodecs.
+Unified image codec API with automatic format detection.
 
-Automatically selects the appropriate codec (AVIF or JPEG-XL) based on file magic bytes.
+Supports AVIF, JPEG-XL, and OpenEXR. Install only the codecs you need — they are optional peer dependencies.
 
 ## Installation
 
 ```bash
-# Install with both codecs
-npm install @jcodecs/auto @jcodecs/avif @jcodecs/jxl
+# All codecs
+npm install @dimkatet/jcodecs-auto @dimkatet/jcodecs-avif @dimkatet/jcodecs-jxl @dimkatet/jcodecs-exr
 
-# Or with only the codecs you need
-npm install @jcodecs/auto @jcodecs/avif   # AVIF only
-npm install @jcodecs/auto @jcodecs/jxl    # JPEG-XL only
+# Or only the formats you support
+npm install @dimkatet/jcodecs-auto @dimkatet/jcodecs-avif @dimkatet/jcodecs-jxl
+npm install @dimkatet/jcodecs-auto @dimkatet/jcodecs-exr
 ```
 
 ## Features
 
-- **Auto-detection** - Detects format from magic bytes
-- **Unified API** - Same interface for all codecs
-- **Peer Dependencies** - Install only codecs you need
-- **Type Safety** - Discriminated unions for format-specific metadata
-- **Transcode** - Convert between formats in one call
+- Auto-detects format from magic bytes (EXR → JXL → AVIF)
+- Unified `decode` / `encode` / `transcode` API across all codecs
+- All codecs return the same `ImageDescriptor` type — no format-specific metadata handling
+- Type guards for format-narrowing (`isAVIFImageData`, `isJXLImageData`, `isEXRImageData`)
+- Graceful handling of missing codecs (`CodecNotInstalledError`)
+- Per-format option overrides
 
 ## Quick Start
 
-### Decode (Auto-detect)
+### Decode
 
 ```typescript
-import { decode, detectFormat } from '@jcodecs/auto';
+import { decode, decodeToImageData, getImageInfo, detectFormat } from '@dimkatet/jcodecs-auto';
 
-// Load unknown image
-const buffer = await fetch('image.unknown').then(r => r.arrayBuffer());
+const buffer = await fetch('unknown.img').then(r => r.arrayBuffer());
 
-// Check format before decoding
-const format = detectFormat(buffer);
-console.log(format); // 'avif' | 'jxl' | 'unknown'
+// Optional: inspect format before decoding
+const format = detectFormat(buffer); // 'avif' | 'jxl' | 'exr' | 'unknown'
 
-// Decode with auto-detection
-const decoded = await decode(buffer);
-console.log(decoded.format);  // 'avif' or 'jxl'
-console.log(decoded.width, decoded.height);
-console.log(decoded.metadata); // Format-specific metadata
+// Auto-detect and decode
+const { data, descriptor, format: fmt } = await decode(buffer);
+
+console.log(fmt);                              // 'avif' | 'jxl' | 'exr'
+console.log(descriptor.geometry.width);
+console.log(descriptor.numeric.dataType);      // 'uint8' | 'float32' | ...
+console.log(descriptor.color?.primaries);      // 'bt709' | 'bt2020' | ...
+console.log(descriptor.transfer?.function);    // 'pq' | 'hlg' | 'linear' | ...
+console.log(descriptor.hdr?.maxCLL);
+
+// Decode to standard 8-bit ImageData (for canvas)
+const imageData = await decodeToImageData(buffer);
+ctx.putImageData(imageData, 0, 0);
+
+// Metadata only (no pixel decode)
+const { descriptor: info, format: infoFmt } = await getImageInfo(buffer);
 ```
 
 ### Encode
 
 ```typescript
-import { encode, encodeSimple } from '@jcodecs/auto';
+import { encode, encodeSimple } from '@dimkatet/jcodecs-auto';
 
-// Encode to AVIF
-const avifBytes = await encode(imageData, {
-  format: 'avif',
-  quality: 80,
-});
+// Encode from decoded AutoImageData
+const avifBytes = await encode(decoded, { format: 'avif', quality: 80 });
+const jxlBytes  = await encode(decoded, { format: 'jxl',  quality: 85, lossless: false });
+const exrBytes  = await encode(decoded, { format: 'exr',  exr: { compression: 'piz' } });
 
-// Encode to JXL
-const jxlBytes = await encode(imageData, {
-  format: 'jxl',
-  quality: 85,
-  lossless: true,
-});
+// Encode from standard ImageData
+const avif2 = await encode(imageData, { format: 'avif', quality: 75 });
 
-// Simple encode (quality only)
-const simple = await encodeSimple(imageData, 'avif', 75);
+// Simple encode (ImageData + format + optional quality)
+const simple = await encodeSimple(imageData, 'avif', 80);
+const simpleJxl = await encodeSimple(imageData, 'jxl');
 ```
 
 ### Transcode
 
 ```typescript
-import { transcode } from '@jcodecs/auto';
+import { transcode } from '@dimkatet/jcodecs-auto';
 
-// Convert AVIF to JXL
-const jxlBytes = await transcode(avifBuffer, 'jxl', {
-  quality: 90,
-});
-
-// Convert JXL to AVIF
-const avifBytes = await transcode(jxlBuffer, 'avif', {
-  quality: 80,
-  bitDepth: 10,
-});
-```
-
-### Type Narrowing
-
-```typescript
-import { decode, isAVIFImageData, isJXLImageData } from '@jcodecs/auto';
-
-const decoded = await decode(buffer);
-
-if (isAVIFImageData(decoded)) {
-  // TypeScript knows this is AVIF
-  console.log(decoded.metadata.matrixCoefficients);
-}
-
-if (isJXLImageData(decoded)) {
-  // TypeScript knows this is JXL
-  console.log(decoded.metadata.isAnimated);
-  console.log(decoded.metadata.frameCount);
-}
+// Convert any format to another in one call
+const jxlBytes  = await transcode(avifBuffer, 'jxl',  { quality: 90 });
+const avifBytes = await transcode(jxlBuffer,  'avif', { quality: 80 });
+const exrBytes  = await transcode(avifBuffer, 'exr',  { exr: { compression: 'zip' } });
 ```
 
 ### Format-Specific Options
 
 ```typescript
-import { encode } from '@jcodecs/auto';
+import { encode } from '@dimkatet/jcodecs-auto';
 
-// Common options apply to both formats
-const result = await encode(imageData, {
+// Common options apply across formats
+const result = await encode(decoded, {
   format: 'avif',
   quality: 80,
-  bitDepth: 10,
-  colorSpace: 'display-p3',
+  maxThreads: 4,
 });
 
-// Override with format-specific options
-const result2 = await encode(imageData, {
+// Per-codec overrides take precedence
+const result2 = await encode(decoded, {
   format: 'avif',
   quality: 80,
-  avif: {
-    speed: 4,
-    chromaSubsampling: '4:4:4',
-    tune: 'ssim',
-  },
+  avif: { speed: 4, tune: 'ssim' },
 });
 
-const result3 = await encode(imageData, {
+const result3 = await encode(decoded, {
   format: 'jxl',
   quality: 85,
-  jxl: {
-    effort: 9,
-    progressive: true,
-  },
+  jxl: { effort: 9, progressive: true },
 });
+
+const result4 = await encode(decoded, {
+  format: 'exr',
+  exr: { compression: 'dwab', dataType: 'float16' },
+});
+```
+
+### Type Guards
+
+```typescript
+import { decode, isAVIFImageData, isJXLImageData, isEXRImageData } from '@dimkatet/jcodecs-auto';
+
+const decoded = await decode(buffer);
+
+if (isAVIFImageData(decoded)) {
+  // decoded.format === 'avif'
+  // TypeScript knows this
+}
+
+if (isJXLImageData(decoded)) {
+  // decoded.format === 'jxl'
+}
+
+if (isEXRImageData(decoded)) {
+  // decoded.format === 'exr'
+  // EXR-specific info in decoded.descriptor.formatSpecific
+}
 ```
 
 ### Check Available Codecs
 
 ```typescript
-import { isCodecAvailable, getAvailableFormats } from '@jcodecs/auto';
+import { isCodecAvailable, getAvailableFormats } from '@dimkatet/jcodecs-auto';
 
-// Check specific codec
-if (isCodecAvailable('avif')) {
-  console.log('AVIF codec is installed');
-}
+isCodecAvailable('avif'); // true if @dimkatet/jcodecs-avif is installed
+isCodecAvailable('exr');  // true if @dimkatet/jcodecs-exr is installed
 
-// List all available codecs
-const formats = getAvailableFormats();
-console.log(formats); // ['avif', 'jxl'] or subset
+const formats = getAvailableFormats(); // e.g. ['avif', 'jxl', 'exr']
 ```
 
-## Worker Pool
+### Worker Pool
 
 ```typescript
 import {
@@ -160,79 +156,139 @@ import {
   encodeInWorker,
   transcodeInWorker,
   terminateWorkerPool,
-} from '@jcodecs/auto';
+} from '@dimkatet/jcodecs-auto';
 
-// Create pool
 const pool = await createWorkerPool({
   poolSize: 4,
   preferMT: true,
+  // Per-codec pool config
+  avif: { poolSize: 4 },
+  jxl:  { poolSize: 4 },
+  exr:  { poolSize: 2 },
 });
 
-// Decode in worker (auto-detects format)
+// Decode (format auto-detected)
 const decoded = await decodeInWorker(pool, buffer);
 
 // Encode in worker
-const encoded = await encodeInWorker(pool, decoded, {
-  format: 'jxl',
-  quality: 85,
-});
+const encoded = await encodeInWorker(pool, decoded, { format: 'jxl', quality: 85 });
 
 // Transcode in worker (decode + encode in single call)
-const transcoded = await transcodeInWorker(pool, avifBuffer, 'jxl', {
-  quality: 90,
+const transcoded = await transcodeInWorker(pool, avifBuffer, 'exr', {
+  exr: { compression: 'piz' },
 });
 
-// Cleanup
 terminateWorkerPool(pool);
 ```
 
 ## API Reference
 
+### Format Detection
+
+```typescript
+detectFormat(data: Uint8Array | ArrayBuffer): ImageFormat
+// 'avif' | 'jxl' | 'exr' | 'unknown'
+
+getFormatExtension(format: ImageFormat): string
+// '.avif' | '.jxl' | '.exr' | ''
+
+getMimeType(format: ImageFormat): string
+// 'image/avif' | 'image/jxl' | 'image/x-exr' | 'application/octet-stream'
+```
+
+**Detection order** (priority): EXR → JXL → AVIF
+
+| Format | Magic bytes |
+|--------|-------------|
+| EXR | `76 2F 31 01` |
+| JXL codestream | `FF 0A` |
+| JXL container | 12-byte box signature |
+| AVIF | `ftyp` box at offset 4, brand `avif`/`avis`/`mif1` at offset 8 |
+
 ### Decode Functions
 
-| Function | Description |
-|----------|-------------|
-| `decode(buffer, options?)` | Decode to `AutoImageData` (preserves bit depth) |
-| `decodeToImageData(buffer, options?)` | Decode to standard `ImageData` (8-bit) |
-| `getImageInfo(buffer, options?)` | Get dimensions/metadata without full decode |
+```typescript
+decode(
+  input: Uint8Array | ArrayBuffer,
+  options?: AutoDecodeOptions,
+): Promise<AutoImageData>
+
+decodeToImageData(
+  input: Uint8Array | ArrayBuffer,
+  options?: AutoDecodeOptions,
+): Promise<ImageData & { format: ImageFormat }>
+
+getImageInfo(
+  input: Uint8Array | ArrayBuffer,
+  options?: Pick<AutoDecodeOptions, 'format'>,
+): Promise<AutoImageInfo>
+```
 
 ### Encode Functions
 
-| Function | Description |
-|----------|-------------|
-| `encode(imageData, options)` | Encode with full options |
-| `encodeSimple(imageData, format, quality?)` | Simple quality-only encode |
-| `transcode(buffer, targetFormat, options?)` | Decode + encode in one call |
+```typescript
+encode(
+  input: AutoImageData | ImageData,
+  options: AutoEncodeOptions,
+): Promise<Uint8Array>
 
-### Format Detection
+encodeSimple(
+  imageData: ImageData,
+  format: 'avif' | 'jxl' | 'exr',
+  quality?: number,
+): Promise<Uint8Array>
 
-| Function | Description |
-|----------|-------------|
-| `detectFormat(buffer)` | Returns `'avif'` \| `'jxl'` \| `'unknown'` |
-| `getFormatExtension(format)` | Returns `'.avif'` \| `'.jxl'` \| `''` |
-| `getMimeType(format)` | Returns `'image/avif'` \| `'image/jxl'` \| `'application/octet-stream'` |
-| `isCodecAvailable(format)` | Check if codec is installed |
-| `getAvailableFormats()` | List installed codecs |
+transcode(
+  input: Uint8Array | ArrayBuffer,
+  targetFormat: 'avif' | 'jxl' | 'exr',
+  options?: Omit<AutoEncodeOptions, 'format'>,
+): Promise<Uint8Array>
+```
+
+### Options
+
+```typescript
+interface AutoDecodeOptions {
+  format?: ImageFormat;              // Force format (skip detection)
+  bitDepth?: 0 | 8 | 10 | 12 | 16;  // 0 = auto (default)
+  maxThreads?: number;               // 0 = auto (default)
+  ignoreColorProfile?: boolean;      // default: false
+  avif?: AVIFDecodeOptions;
+  jxl?: JXLDecodeOptions;
+  exr?: EXRDecodeOptions;
+}
+
+interface AutoEncodeOptions {
+  format: 'avif' | 'jxl' | 'exr';  // required
+  quality?: number;                  // 0–100, default: 75
+  maxThreads?: number;               // default: 0 (auto)
+  lossless?: boolean;                // default: false (AVIF/JXL only)
+  avif?: AVIFEncodeOptions;
+  jxl?: JXLEncodeOptions;
+  exr?: EXREncodeOptions;
+}
+```
 
 ### Types
 
 ```typescript
-type ImageFormat = 'avif' | 'jxl' | 'unknown';
+type ImageFormat = 'avif' | 'jxl' | 'exr' | 'unknown';
 
 interface AutoImageData {
   data: Uint8Array | Uint16Array | Float16Array | Float32Array;
-  dataType: 'uint8' | 'uint16' | 'float16' | 'float32';
-  bitDepth: number;
-  width: number;
-  height: number;
-  channels: number;
-  format: ImageFormat;
-  metadata: AutoMetadata;
+  descriptor: ImageDescriptor;
+  format: 'avif' | 'jxl' | 'exr';
 }
 
-type AutoMetadata =
-  | ({ format: 'avif' } & AVIFMetadata)
-  | ({ format: 'jxl' } & JXLMetadata);
+interface AutoImageInfo {
+  descriptor: ImageDescriptor;
+  format: 'avif' | 'jxl' | 'exr';
+}
+
+// Type guards
+isAVIFImageData(data: AutoImageData): boolean
+isJXLImageData(data: AutoImageData): boolean
+isEXRImageData(data: AutoImageData): boolean
 ```
 
 ## Error Handling
@@ -241,17 +297,38 @@ type AutoMetadata =
 import {
   decode,
   CodecNotInstalledError,
+  CodecLoadError,
   UnsupportedFormatError,
-} from '@jcodecs/auto';
+} from '@dimkatet/jcodecs-auto';
 
 try {
   const decoded = await decode(buffer);
 } catch (error) {
   if (error instanceof CodecNotInstalledError) {
-    console.error(`Install @jcodecs/${error.format} to decode this format`);
+    // Install the missing package
+    console.error(`Install @dimkatet/jcodecs-${error.format}`);
   } else if (error instanceof UnsupportedFormatError) {
     console.error('Unknown image format');
+  } else if (error instanceof CodecLoadError) {
+    console.error(`Failed to load ${error.format} codec:`, error.cause);
   }
+}
+```
+
+## Multi-threading
+
+Requires HTTP headers:
+
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+```typescript
+import { isMultiThreadSupported } from '@dimkatet/jcodecs-auto';
+
+if (isMultiThreadSupported()) {
+  // Can use preferMT: true in worker pool config
 }
 ```
 
