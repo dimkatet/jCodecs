@@ -1,5 +1,30 @@
 # @dimkatet/jcodecs-auto
 
+## 0.5.0
+
+### Minor Changes
+
+- Add EXR format support via optional peer dependency `@dimkatet/jcodecs-exr`.
+
+  - `detectFormat()` now recognises EXR magic bytes (`0x762f3101`)
+  - `decode()` / `decodeToImageData()` / `getImageInfo()` route to EXR codec
+  - `encode()` / `encodeSimple()` / `transcode()` support `format: 'exr'`
+  - Worker API: `decodeInWorker` / `encodeInWorker` / `transcodeInWorker` handle EXR
+  - `AutoWorkerClient` exposes `.exr` pool; `getWorkerPoolStats` includes EXR stats
+  - New type guard: `isEXRImageData()`
+  - Re-exports: `EXRImageData`, `EXREncodeDescriptor`, `EXREncodeOptions`, `EXRDecodeOptions`
+
+- Descriptor-based encode: `AutoImageData.descriptor` is now passed through to the
+  codec as-is. Removed `bitDepth`, `colorSpace`, `transferFunction` from
+  `AutoEncodeOptions` (descriptor mutations are the caller's responsibility).
+  Removed `ColorSpace` and `TransferFunctionOption` type aliases.
+
+### Patch Changes
+
+- Updated dependencies
+  - @dimkatet/jcodecs-avif@0.6.1
+  - @dimkatet/jcodecs-jxl@0.3.1
+
 ## 0.4.0
 
 ### Minor Changes

@@ -26,6 +26,7 @@ describe('codec-registry', () => {
       const formats = registryModule.getAvailableFormats();
       expect(formats).toContain('avif');
       expect(formats).toContain('jxl');
+      expect(formats).toContain('exr');
     });
 
     it('is idempotent (safe to call multiple times)', async () => {
@@ -34,7 +35,7 @@ describe('codec-registry', () => {
       await registryModule.ensureCodecsRegistered();
 
       const formats = registryModule.getAvailableFormats();
-      expect(formats.length).toBe(2);
+      expect(formats.length).toBe(3);
     });
 
     // Note: Testing missing peer dependencies in browser environment is tricky
@@ -78,6 +79,7 @@ describe('codec-registry', () => {
       expect(Array.isArray(formats)).toBe(true);
       expect(formats).toContain('avif');
       expect(formats).toContain('jxl');
+      expect(formats).toContain('exr');
     });
 
     it('returns empty array if no codecs installed', () => {

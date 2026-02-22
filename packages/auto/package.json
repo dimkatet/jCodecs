@@ -1,6 +1,6 @@
 {
   "name": "@dimkatet/jcodecs-auto",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Auto-detect image format and select codec for jCodecs",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -50,7 +50,8 @@
   },
   "peerDependencies": {
     "@dimkatet/jcodecs-avif": "workspace:*",
-    "@dimkatet/jcodecs-jxl": "workspace:*"
+    "@dimkatet/jcodecs-jxl": "workspace:*",
+    "@dimkatet/jcodecs-exr": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@dimkatet/jcodecs-avif": {
@@ -58,11 +59,15 @@
     },
     "@dimkatet/jcodecs-jxl": {
       "optional": true
+    },
+    "@dimkatet/jcodecs-exr": {
+      "optional": true
     }
   },
   "devDependencies": {
     "@dimkatet/jcodecs-avif": "workspace:*",
     "@dimkatet/jcodecs-jxl": "workspace:*",
+    "@dimkatet/jcodecs-exr": "workspace:*",
     "tsup": "^8.0.0",
     "typescript": "^5.4.0",
     "vitest": "^4.0.18"
@@ -71,10 +76,13 @@
     "avif",
     "jxl",
     "jpeg-xl",
+    "exr",
+    "openexr",
     "image",
     "codec",
     "auto-detect",
-    "wasm"
+    "wasm",
+    "hdr"
   ],
   "license": "MIT",
   "repository": {

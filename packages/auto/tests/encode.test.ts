@@ -114,10 +114,9 @@ describe('encode', () => {
       );
     });
 
-    it('applies bitDepth option (goes into descriptor, 2nd arg)', async () => {
-      // Use AutoImageData so bitDepth is not clamped (ImageData is always 8-bit)
-      const autoImageData = createMockAutoImageData('avif');
-      await encode(autoImageData, { format: 'jxl', bitDepth: 10 });
+    it('AutoImageData descriptor is passed through to codec as-is', async () => {
+      const autoImageData = createMockAutoImageData('avif', { bitDepth: 10 });
+      await encode(autoImageData, { format: 'jxl' });
 
       expect(mockJxlAdapter.encode).toHaveBeenCalledWith(
         expect.any(Uint8Array),
@@ -137,14 +136,13 @@ describe('encode', () => {
       );
     });
 
-    it('applies colorSpace option (maps to descriptor.color.primaries, 2nd arg)', async () => {
+    it('ImageData gets bt709/srgb descriptor (8-bit sRGB default)', async () => {
       const imageData = createMockImageData();
-      await encode(imageData, { format: 'avif', colorSpace: 'display-p3' });
+      await encode(imageData, { format: 'avif' });
 
-      // 'display-p3' maps to ImageDescriptor primaries 'displayP3'
       expect(mockAvifAdapter.encode).toHaveBeenCalledWith(
         expect.any(Uint8Array),
-        expect.objectContaining({ color: { primaries: 'displayP3' } }),
+        expect.objectContaining({ color: { primaries: 'bt709' } }),
         expect.any(Object)
       );
     });

@@ -53,7 +53,7 @@ export type {
   ImageDescriptor,
 } from './types';
 
-export { isAVIFImageData, isJXLImageData } from './types';
+export { isAVIFImageData, isJXLImageData, isEXRImageData } from './types';
 
 // ============================================================================
 // Options
@@ -62,13 +62,13 @@ export { isAVIFImageData, isJXLImageData } from './types';
 export type {
   AutoDecodeOptions,
   AutoEncodeOptions,
-  ColorSpace,
-  TransferFunctionOption,
   // Re-exports from codec packages
   AVIFEncodeOptions,
   AVIFDecodeOptions,
   JXLEncodeOptions,
   JXLDecodeOptions,
+  EXREncodeOptions,
+  EXRDecodeOptions,
 } from './options';
 
 export { DEFAULT_DECODE_OPTIONS, DEFAULT_ENCODE_OPTIONS } from './options';

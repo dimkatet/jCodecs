@@ -9,6 +9,7 @@ import type { ImageDescriptor } from '@dimkatet/jcodecs-core';
 import {
   mapToAVIFDecodeOptions,
   mapToJXLDecodeOptions,
+  mapToEXRDecodeOptions,
   DEFAULT_DECODE_OPTIONS,
   type AutoDecodeOptions,
 } from './options';
@@ -42,6 +43,9 @@ export async function decode(
       break;
     case 'jxl':
       codecOptions = mapToJXLDecodeOptions(opts);
+      break;
+    case 'exr':
+      codecOptions = mapToEXRDecodeOptions(opts);
       break;
   }
 
@@ -84,6 +88,9 @@ export async function decodeToImageData(
       break;
     case 'jxl':
       codecOptions = mapToJXLDecodeOptions(opts);
+      break;
+    case 'exr':
+      codecOptions = mapToEXRDecodeOptions(opts);
       break;
   }
 

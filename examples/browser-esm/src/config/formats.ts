@@ -157,11 +157,60 @@ export const JXL_FORMAT: FormatConfig = {
 };
 
 /**
+ * EXR Format Configuration
+ */
+export const EXR_FORMAT: FormatConfig = {
+  name: 'OpenEXR',
+  extension: 'exr',
+  mimeType: 'image/x-exr',
+  controls: [
+    {
+      type: 'select',
+      key: 'dataType',
+      label: 'Data Type',
+      options: [
+        { value: 'float16', label: 'Float16 (Half)' },
+        { value: 'float32', label: 'Float32' },
+      ],
+      defaultValue: 'float16',
+    },
+    {
+      type: 'select',
+      key: 'compression',
+      label: 'Compression',
+      options: [
+        { value: 'none', label: 'None' },
+        { value: 'rle', label: 'RLE' },
+        { value: 'zips', label: 'ZIPS (1 scanline)' },
+        { value: 'zip', label: 'ZIP (16 scanlines)' },
+        { value: 'piz', label: 'PIZ' },
+        { value: 'pxr24', label: 'PXR24' },
+        { value: 'dwaa', label: 'DWAA (32x32 blocks)' },
+        { value: 'dwab', label: 'DWAB (256x256 blocks)' },
+      ],
+      defaultValue: 'zip',
+    },
+    {
+      type: 'select',
+      key: 'colorSpace',
+      label: 'Color Space',
+      options: [
+        { value: 'bt709', label: 'Rec.709 (sRGB)' },
+        { value: 'display-p3', label: 'Display P3' },
+        { value: 'rec2020', label: 'Rec.2020' },
+      ],
+      defaultValue: 'bt709',
+    },
+  ],
+}
+
+/**
  * All supported formats
  */
 export const FORMATS: Record<string, FormatConfig> = {
   avif: AVIF_FORMAT,
   jxl: JXL_FORMAT,
+  exr: EXR_FORMAT,
 };
 
 /**

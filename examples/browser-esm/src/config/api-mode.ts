@@ -13,7 +13,8 @@ export type ApiMode = 'direct' | 'worker';
  * - 'direct': Uses direct WASM calls (blocks main thread, simpler)
  * - 'worker': Uses Worker Pool API (non-blocking, better for heavy tasks)
  */
-export const API_MODE: ApiMode = 'direct';
+export const API_MODE: ApiMode = 'worker';
+
 
 /**
  * Configuration for Worker Pool (only used when API_MODE = 'worker')
@@ -21,7 +22,7 @@ export const API_MODE: ApiMode = 'direct';
 export const WORKER_CONFIG = {
   poolSize: 1,
   preferMT: true,
-  lazyInit: false,
+  lazy: false,
 } as const;
 
 /**

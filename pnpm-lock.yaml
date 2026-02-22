@@ -35,9 +35,15 @@ importers:
 
   examples/browser-esm:
     dependencies:
+      '@dimkatet/jcodecs-auto':
+        specifier: workspace:*
+        version: link:../../packages/auto
       '@dimkatet/jcodecs-avif':
         specifier: workspace:*
         version: link:../../packages/avif
+      '@dimkatet/jcodecs-exr':
+        specifier: workspace:*
+        version: link:../../packages/exr
       '@dimkatet/jcodecs-jxl':
         specifier: workspace:*
         version: link:../../packages/jxl
@@ -67,6 +73,9 @@ importers:
       '@dimkatet/jcodecs-avif':
         specifier: workspace:*
         version: link:../avif
+      '@dimkatet/jcodecs-exr':
+        specifier: workspace:*
+        version: link:../exr
       '@dimkatet/jcodecs-jxl':
         specifier: workspace:*
         version: link:../jxl
@@ -104,6 +113,25 @@ importers:
 
   packages/core:
     devDependencies:
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(postcss@8.5.6)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@20.19.30)(@vitest/browser-playwright@4.0.18)
+
+  packages/exr:
+    dependencies:
+      '@dimkatet/jcodecs-core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/emscripten':
+        specifier: ^1.39.10
+        version: 1.41.5
       tsup:
         specifier: ^8.0.0
         version: 8.5.1(postcss@8.5.6)(typescript@5.9.3)

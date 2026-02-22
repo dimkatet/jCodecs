@@ -7,18 +7,18 @@ import { getFormatConfig, getDefaultOptions, FORMATS } from './config/formats';
 import type { FormatConfig, FormatOptions } from './types/format-config';
 import { initializeCodecs, decode, encode, getApiMode } from './utils/codec';
 import { toDisplayableImageData, formatFileSize } from './utils/image';
-import { ExtendedImageData } from '@dimkatet/jcodecs-avif';
+import type { AutoImageData } from '@dimkatet/jcodecs-auto';
 
 export const App: React.FC = () => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [targetFormat, setTargetFormat] = useState<FormatConfig | null>(null);
   const [encodeOptions, setEncodeOptions] = useState<FormatOptions>({});
 
-  const [inputImageData, setInputImageData] = useState<ExtendedImageData | null>(null);
+  const [inputImageData, setInputImageData] = useState<AutoImageData | null>(null);
   const [inputInfo, setInputInfo] = useState<string>('Loading WASM modules...');
   const [inputMetadata, setInputMetadata] = useState<Record<string, any> | undefined>();
 
-  const [outputImageData, setOutputImageData] = useState<ExtendedImageData | null>(null);
+  const [outputImageData, setOutputImageData] = useState<AutoImageData | null>(null);
   const [outputInfo, setOutputInfo] = useState<string>('Encode an image to see output');
   const [outputMetadata, setOutputMetadata] = useState<Record<string, any> | undefined>();
 
@@ -65,29 +65,37 @@ export const App: React.FC = () => {
       const data = new Uint8Array(buffer);
 
       const start = performance.now();
-      const result: ExtendedImageData = await decode(data, extension);
+      const result: AutoImageData = await decode(data, extension);
       const elapsed = performance.now() - start;
       setInputImageData(result);
 
       console.log('[Decode] Completed in', elapsed.toFixed(2), 'ms');
 
-      // Display image
-      toDisplayableImageData(result);
+      const { geometry, numeric, channels, color, transfer, luminance, sampling } =
+        result.descriptor;
+      const isHDR = luminance?.reference === 'hdr';
 
-      // Set metadata
-      const fullMetadata = {
-        width: result.width,
-        height: result.height,
-        bitDepth: result.bitDepth,
-        channels: result.channels,
-        ...result.metadata,
-      };
-      setInputMetadata(fullMetadata);
+      // Build flat metadata for display (exclude undefined values)
+      setInputMetadata(
+        Object.fromEntries(
+          Object.entries({
+            width: geometry.width,
+            height: geometry.height,
+            bitDepth: numeric.bitDepth,
+            dataType: numeric.dataType,
+            channels: channels.count,
+            channelModel: channels.model,
+            colorPrimaries: color?.primaries,
+            transferFunction: transfer?.function,
+            isHDR,
+            chromaSubsampling: sampling?.chromaSubsampling,
+          }).filter(([, v]) => v !== undefined),
+        ),
+      );
 
-      // Format info string
       const infoStr =
-        `${result.width}x${result.height}, ${result.bitDepth}-bit, ` +
-        `${result.metadata.isHDR ? 'HDR' : 'SDR'} ${result.metadata.colorPrimaries} ` +
+        `${geometry.width}x${geometry.height}, ${numeric.bitDepth}-bit, ` +
+        `${isHDR ? 'HDR' : 'SDR'} ${color?.primaries ?? 'unknown'} ` +
         `(${elapsed.toFixed(0)}ms, ${formatFileSize(file.size)})`;
       setInputInfo(infoStr);
     } catch (err) {
@@ -123,21 +131,30 @@ export const App: React.FC = () => {
       const decoded = await decode(encoded, targetFormat.extension);
       setOutputImageData(decoded);
 
-      // Set output metadata
-      const outMetadata = {
-        width: decoded.width,
-        height: decoded.height,
-        bitDepth: decoded.bitDepth,
-        channels: decoded.channels,
-        ...decoded.metadata,
-      };
-      setOutputMetadata(outMetadata);
+      const outDesc = decoded.descriptor;
+      const outIsHDR = outDesc.luminance?.reference === 'hdr';
 
-      // Format info string
+      setOutputMetadata(
+        Object.fromEntries(
+          Object.entries({
+            width: outDesc.geometry.width,
+            height: outDesc.geometry.height,
+            bitDepth: outDesc.numeric.bitDepth,
+            dataType: outDesc.numeric.dataType,
+            channels: outDesc.channels.count,
+            channelModel: outDesc.channels.model,
+            colorPrimaries: outDesc.color?.primaries,
+            transferFunction: outDesc.transfer?.function,
+            isHDR: outIsHDR,
+            chromaSubsampling: outDesc.sampling?.chromaSubsampling,
+          }).filter(([, v]) => v !== undefined),
+        ),
+      );
+
       const ratio = ((encoded.length / originalFileSize) * 100).toFixed(1);
       const infoStr =
         `${formatFileSize(encoded.length)} (${ratio}% of original), ` +
-        `${decoded.bitDepth}-bit ` +
+        `${outDesc.numeric.bitDepth}-bit ` +
         `(${encodeTime.toFixed(0)}ms)`;
       setOutputInfo(infoStr);
     } catch (err) {
@@ -175,7 +192,7 @@ export const App: React.FC = () => {
           />
           <FileUpload
             onFileSelect={handleFileSelect}
-            acceptedFormats={['avif', 'jxl']}
+            acceptedFormats={['avif', 'jxl', 'exr']}
           />
         </div>
 

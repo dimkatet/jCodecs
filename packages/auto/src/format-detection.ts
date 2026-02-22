@@ -2,12 +2,15 @@
  * Image format detection via magic bytes
  */
 
-export type ImageFormat = 'avif' | 'jxl' | 'unknown';
+export type ImageFormat = 'avif' | 'jxl' | 'exr' | 'unknown';
 
 interface FormatSignature {
   format: ImageFormat;
   check: (data: Uint8Array) => boolean;
 }
+
+// EXR: magic number 20000630 (0x76 0x2F 0x31 0x01)
+const EXR_MAGIC = [0x76, 0x2f, 0x31, 0x01];
 
 // AVIF: ftyp box at offset 4, brand at offset 8
 const AVIF_FTYP = [0x66, 0x74, 0x79, 0x70]; // 'ftyp'
@@ -23,6 +26,13 @@ const JXL_CONTAINER = [
 ];
 
 const FORMAT_SIGNATURES: FormatSignature[] = [
+  {
+    format: 'exr',
+    check: (data) => {
+      if (data.length < 4) return false;
+      return EXR_MAGIC.every((byte, i) => data[i] === byte);
+    },
+  },
   {
     format: 'jxl',
     check: (data) => {
@@ -79,6 +89,8 @@ export function getFormatExtension(format: ImageFormat): string {
       return '.avif';
     case 'jxl':
       return '.jxl';
+    case 'exr':
+      return '.exr';
     default:
       return '';
   }
@@ -93,6 +105,8 @@ export function getMimeType(format: ImageFormat): string {
       return 'image/avif';
     case 'jxl':
       return 'image/jxl';
+    case 'exr':
+      return 'image/x-exr';
     default:
       return 'application/octet-stream';
   }

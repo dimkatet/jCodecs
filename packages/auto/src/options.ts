@@ -1,13 +1,11 @@
 import type { AVIFEncodeOptions, AVIFDecodeOptions } from '@dimkatet/jcodecs-avif';
 import type { JXLEncodeOptions, JXLDecodeOptions } from '@dimkatet/jcodecs-jxl';
+import type { EXREncodeOptions, EXRDecodeOptions } from '@dimkatet/jcodecs-exr';
 import type { ImageFormat } from './format-detection';
 
 // ============================================================================
 // Common option types
 // ============================================================================
-
-export type ColorSpace = 'srgb' | 'display-p3' | 'rec2020';
-export type TransferFunctionOption = 'srgb' | 'pq' | 'hlg' | 'linear';
 
 // ============================================================================
 // Unified Decode Options
@@ -50,6 +48,11 @@ export interface AutoDecodeOptions {
    * JXL-specific options (takes precedence over common options).
    */
   jxl?: JXLDecodeOptions;
+
+  /**
+   * EXR-specific options (takes precedence over common options).
+   */
+  exr?: EXRDecodeOptions;
 }
 
 // ============================================================================
@@ -69,12 +72,6 @@ export interface AutoEncodeOptions {
   quality?: number;
 
   /**
-   * Output bit depth (goes into the descriptor).
-   * @default 8
-   */
-  bitDepth?: 8 | 10 | 12 | 16;
-
-  /**
    * Maximum number of threads for encoding.
    * 0 = auto (codec decides based on available cores).
    * @default 0
@@ -89,18 +86,6 @@ export interface AutoEncodeOptions {
   lossless?: boolean;
 
   /**
-   * Output color space (maps to descriptor color primaries).
-   * @default 'srgb'
-   */
-  colorSpace?: ColorSpace;
-
-  /**
-   * Transfer function for HDR content (maps to descriptor transfer function).
-   * @default 'srgb'
-   */
-  transferFunction?: TransferFunctionOption;
-
-  /**
    * AVIF-specific options (takes precedence over common options).
    */
   avif?: AVIFEncodeOptions;
@@ -109,6 +94,11 @@ export interface AutoEncodeOptions {
    * JXL-specific options (takes precedence over common options).
    */
   jxl?: JXLEncodeOptions;
+
+  /**
+   * EXR-specific options (takes precedence over common options).
+   */
+  exr?: EXREncodeOptions;
 }
 
 // ============================================================================
@@ -165,6 +155,26 @@ export function mapToJXLEncodeOptions(opts: AutoEncodeOptions): JXLEncodeOptions
   };
 }
 
+/**
+ * Map unified decode options to EXR-specific options
+ */
+export function mapToEXRDecodeOptions(opts: AutoDecodeOptions): EXRDecodeOptions {
+  return {
+    maxThreads: opts.maxThreads,
+    ...opts.exr,
+  };
+}
+
+/**
+ * Map unified encode options to EXR-specific options
+ */
+export function mapToEXREncodeOptions(opts: AutoEncodeOptions): EXREncodeOptions {
+  return {
+    maxThreads: opts.maxThreads,
+    ...opts.exr,
+  };
+}
+
 // ============================================================================
 // Default options
 // ============================================================================
@@ -177,11 +187,8 @@ export const DEFAULT_DECODE_OPTIONS: AutoDecodeOptions = {
 
 export const DEFAULT_ENCODE_OPTIONS: Omit<AutoEncodeOptions, 'format'> = {
   quality: 75,
-  bitDepth: 8,
   maxThreads: 0,
   lossless: false,
-  colorSpace: 'srgb',
-  transferFunction: 'srgb',
 };
 
 // ============================================================================
@@ -190,3 +197,4 @@ export const DEFAULT_ENCODE_OPTIONS: Omit<AutoEncodeOptions, 'format'> = {
 
 export type { AVIFEncodeOptions, AVIFDecodeOptions } from '@dimkatet/jcodecs-avif';
 export type { JXLEncodeOptions, JXLDecodeOptions } from '@dimkatet/jcodecs-jxl';
+export type { EXREncodeOptions, EXRDecodeOptions } from '@dimkatet/jcodecs-exr';

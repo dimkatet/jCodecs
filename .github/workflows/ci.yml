@@ -21,8 +21,10 @@ jobs:
     outputs:
       wasm-avif: ${{ steps.filter.outputs.wasm-avif }}
       wasm-jxl: ${{ steps.filter.outputs.wasm-jxl }}
+      wasm-exr: ${{ steps.filter.outputs.wasm-exr }}
       cache-avif-exists: ${{ steps.check-avif.outputs.cache-hit }}
       cache-jxl-exists: ${{ steps.check-jxl.outputs.cache-hit }}
+      cache-exr-exists: ${{ steps.check-exr.outputs.cache-hit }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -35,6 +37,10 @@ jobs:
               - 'emscripten-cross.txt'
             wasm-jxl:
               - 'packages/jxl/src/wasm/**'
+              - 'Dockerfile'
+              - 'emscripten-cross.txt'
+            wasm-exr:
+              - 'packages/exr/src/wasm/**'
               - 'Dockerfile'
               - 'emscripten-cross.txt'
             # Check if WASM caches exist (lookup only, no download)
@@ -52,6 +58,14 @@ jobs:
         with:
           path: packages/jxl/src/wasm/*.js
           key: wasm-jxl-${{ hashFiles('packages/jxl/src/wasm/*.cpp', 'packages/jxl/src/wasm/CMakeLists.txt', 'Dockerfile', 'emscripten-cross.txt') }}
+          lookup-only: true
+
+      - name: Check EXR WASM cache
+        id: check-exr
+        uses: actions/cache/restore@v4
+        with:
+          path: packages/exr/src/wasm/*.js
+          key: wasm-exr-${{ hashFiles('packages/exr/src/wasm/*.cpp', 'packages/exr/src/wasm/CMakeLists.txt', 'Dockerfile', 'emscripten-cross.txt') }}
           lookup-only: true
 
   # Build AVIF WASM if sources changed OR cache doesn't exist
@@ -144,10 +158,55 @@ jobs:
           path: packages/jxl/src/wasm/*.js
           key: wasm-jxl-${{ hashFiles('packages/jxl/src/wasm/*.cpp', 'packages/jxl/src/wasm/CMakeLists.txt', 'Dockerfile', 'emscripten-cross.txt') }}
 
+  # Build EXR WASM if sources changed OR cache doesn't exist
+  build-wasm-exr:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.wasm-exr == 'true' || needs.changes.outputs.cache-exr-exists != 'true'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build EXR WASM
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: exr
+          push: false
+          outputs: type=local,dest=packages/exr/src/wasm
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:exr-cache
+          cache-to: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && format('type=registry,ref={0}/{1}:exr-cache,mode=max', env.REGISTRY, env.IMAGE_NAME) || '' }}
+
+      - name: Upload EXR WASM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-exr-built
+          path: packages/exr/src/wasm/*.js
+          retention-days: 1
+
+      - name: Save EXR WASM to cache
+        uses: actions/cache/save@v4
+        with:
+          path: packages/exr/src/wasm/*.js
+          key: wasm-exr-${{ hashFiles('packages/exr/src/wasm/*.cpp', 'packages/exr/src/wasm/CMakeLists.txt', 'Dockerfile', 'emscripten-cross.txt') }}
+
   # Prepare WASM artifacts (from build or cache)
   prepare-wasm:
     runs-on: ubuntu-latest
-    needs: [changes, build-wasm-avif, build-wasm-jxl]
+    needs: [changes, build-wasm-avif, build-wasm-jxl, build-wasm-exr]
     if: always() && !failure() && !cancelled()
 
     steps:
@@ -185,6 +244,22 @@ jobs:
           key: wasm-jxl-${{ hashFiles('packages/jxl/src/wasm/*.cpp', 'packages/jxl/src/wasm/CMakeLists.txt', 'Dockerfile', 'emscripten-cross.txt') }}
           fail-on-cache-miss: true
 
+      # EXR: download artifact if rebuilt, otherwise restore from cache
+      - name: Download EXR WASM artifact (if rebuilt)
+        if: needs.changes.outputs.wasm-exr == 'true' || needs.changes.outputs.cache-exr-exists != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-exr-built
+          path: packages/exr/src/wasm
+
+      - name: Restore EXR WASM from cache (if not rebuilt)
+        if: needs.changes.outputs.wasm-exr != 'true' && needs.changes.outputs.cache-exr-exists == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: packages/exr/src/wasm/*.js
+          key: wasm-exr-${{ hashFiles('packages/exr/src/wasm/*.cpp', 'packages/exr/src/wasm/CMakeLists.txt', 'Dockerfile', 'emscripten-cross.txt') }}
+          fail-on-cache-miss: true
+
       # Upload combined WASM for downstream jobs
       - name: Upload combined WASM artifacts
         uses: actions/upload-artifact@v4
@@ -193,6 +268,7 @@ jobs:
           path: |
             packages/avif/src/wasm/*.js
             packages/jxl/src/wasm/*.js
+            packages/exr/src/wasm/*.js
           retention-days: 1
 
   # TypeScript build

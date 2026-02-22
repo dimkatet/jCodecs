@@ -5,48 +5,24 @@
  * worker pools from @jcodecs/avif and @jcodecs/jxl packages.
  */
 import { isMultiThreadSupported } from '@dimkatet/jcodecs-core';
-import type { ImageDescriptor } from '@dimkatet/jcodecs-core';
 import { detectFormat, type ImageFormat } from './format-detection';
 import type { AutoImageData } from './types';
-import type { AutoDecodeOptions, AutoEncodeOptions, AVIFEncodeOptions, JXLEncodeOptions } from './options';
+import type { AutoDecodeOptions, AutoEncodeOptions, AVIFEncodeOptions, JXLEncodeOptions, EXREncodeOptions } from './options';
 import { UnsupportedFormatError, CodecNotInstalledError } from './errors';
 
 // ============================================================================
 // Descriptor building helpers (for encode in worker)
 // ============================================================================
 
-function mapColorSpaceToPrimaries(colorSpace?: string): string {
-  switch (colorSpace) {
-    case 'display-p3': return 'displayP3';
-    case 'rec2020': return 'bt2020';
-    default: return 'bt709';
-  }
-}
-
-function buildDescriptorFromImageDescriptor(
-  src: ImageDescriptor,
-  opts: AutoEncodeOptions,
-): { geometry: { width: number; height: number }; channels: { model: string; count: number }; numeric: { dataType: string; bitDepth: number }; color?: { primaries?: string }; transfer?: { function?: string } } {
-  const bitDepth = opts.bitDepth ?? (src.numeric.bitDepth as number);
-  return {
-    geometry: { width: src.geometry.width, height: src.geometry.height },
-    channels: { model: src.channels.model, count: src.channels.count },
-    numeric: { dataType: src.numeric.dataType, bitDepth },
-    color: { primaries: opts.colorSpace ? mapColorSpaceToPrimaries(opts.colorSpace) : src.color?.primaries },
-    transfer: { function: opts.transferFunction ?? src.transfer?.function },
-  };
-}
-
 function buildDescriptorFromImageData(
   imgData: ImageData,
-  opts: AutoEncodeOptions,
-): { geometry: { width: number; height: number }; channels: { model: string; count: number }; numeric: { dataType: string; bitDepth: number }; color?: { primaries?: string }; transfer?: { function?: string } } {
+): Record<string, unknown> {
   return {
     geometry: { width: imgData.width, height: imgData.height },
     channels: { model: 'rgba', count: 4 },
     numeric: { dataType: 'uint8', bitDepth: 8 },
-    color: { primaries: mapColorSpaceToPrimaries(opts.colorSpace) },
-    transfer: { function: opts.transferFunction ?? 'srgb' },
+    color: { primaries: 'bt709' },
+    transfer: { function: 'srgb' },
   };
 }
 
@@ -78,6 +54,8 @@ export interface AutoWorkerPoolConfig extends WorkerPoolConfig {
   avif?: WorkerPoolConfig;
   /** JXL-specific configuration overrides */
   jxl?: WorkerPoolConfig;
+  /** EXR-specific configuration overrides */
+  exr?: WorkerPoolConfig;
 }
 
 // Codec worker client types (imported dynamically)
@@ -86,6 +64,9 @@ type AVIFWorkerClient = Awaited<
 >;
 type JXLWorkerClient = Awaited<
   ReturnType<typeof import('@dimkatet/jcodecs-jxl/worker-api').createWorkerPool>
+>;
+type EXRWorkerClient = Awaited<
+  ReturnType<typeof import('@dimkatet/jcodecs-exr/worker-api').createWorkerPool>
 >;
 
 /**
@@ -96,6 +77,8 @@ export interface AutoWorkerClient {
   readonly avif?: AVIFWorkerClient;
   /** JXL worker pool (undefined if not installed or not initialized yet) */
   readonly jxl?: JXLWorkerClient;
+  /** EXR worker pool (undefined if not installed or not initialized yet) */
+  readonly exr?: EXRWorkerClient;
   /** List of available codecs (installed packages) */
   readonly availableCodecs: readonly ImageFormat[];
 }
@@ -110,12 +93,14 @@ interface InternalState {
   pools: {
     avif?: AVIFWorkerClient;
     jxl?: JXLWorkerClient;
+    exr?: EXRWorkerClient;
   };
   initPromises: Map<ImageFormat, Promise<void>>;
   // Cached module references
   modules: {
     avif?: typeof import('@dimkatet/jcodecs-avif/worker-api');
     jxl?: typeof import('@dimkatet/jcodecs-jxl/worker-api');
+    exr?: typeof import('@dimkatet/jcodecs-exr/worker-api');
   };
 }
 
@@ -154,6 +139,16 @@ async function detectAvailableCodecs(
     }
   }
 
+  // Check EXR
+  if (!formats || formats.includes('exr')) {
+    try {
+      modules.exr = await import('@dimkatet/jcodecs-exr/worker-api');
+      available.add('exr');
+    } catch {
+      // Not installed
+    }
+  }
+
   return { available, modules };
 }
 
@@ -176,6 +171,7 @@ async function initPool(
   // Already initialized
   if (format === 'avif' && state.pools.avif) return;
   if (format === 'jxl' && state.pools.jxl) return;
+  if (format === 'exr' && state.pools.exr) return;
 
   // Check if initialization is in progress
   const existing = state.initPromises.get(format);
@@ -195,6 +191,9 @@ async function initPool(
     } else if (format === 'jxl' && state.modules.jxl) {
       const config = mergeConfig(baseConfig, state.config.jxl);
       state.pools.jxl = await state.modules.jxl.createWorkerPool(config);
+    } else if (format === 'exr' && state.modules.exr) {
+      const config = mergeConfig(baseConfig, state.config.exr);
+      state.pools.exr = await state.modules.exr.createWorkerPool(config);
     }
     state.initPromises.delete(format);
   })();
@@ -268,6 +267,9 @@ export async function createWorkerPool(
     get jxl() {
       return state.pools.jxl;
     },
+    get exr() {
+      return state.pools.exr;
+    },
     get availableCodecs() {
       return [...state.availableCodecs] as const;
     },
@@ -332,6 +334,15 @@ export async function decodeInWorker(
     return { data: result.data, descriptor: result.descriptor, format: 'jxl' };
   }
 
+  if (format === 'exr' && state.pools.exr && state.modules.exr) {
+    const result = await state.modules.exr.decodeInWorker(
+      state.pools.exr,
+      data,
+      options,
+    );
+    return { data: result.data, descriptor: result.descriptor, format: 'exr' };
+  }
+
   throw new CodecNotInstalledError(format);
 }
 
@@ -355,18 +366,21 @@ export async function encodeInWorker(
 
   // Split input into raw data + descriptor
   let pixelData: Uint8Array | Uint16Array | Float16Array | Float32Array;
-  let descriptor: ReturnType<typeof buildDescriptorFromImageDescriptor>;
+  let descriptor: unknown;
 
   if ('descriptor' in input) {
+    // AutoImageData — pass data and descriptor through as-is
     pixelData = input.data;
-    descriptor = buildDescriptorFromImageDescriptor(input.descriptor, options);
+    descriptor = input.descriptor as unknown as Record<string, unknown>;
   } else {
+    // Standard ImageData (8-bit sRGB RGBA)
     pixelData = new Uint8Array(input.data.buffer, input.data.byteOffset, input.data.byteLength);
-    descriptor = buildDescriptorFromImageData(input, options);
+    descriptor = buildDescriptorFromImageData(input);
   }
 
   const avifOpts: AVIFEncodeOptions = { quality: options.quality, maxThreads: options.maxThreads, lossless: options.lossless, ...options.avif };
   const jxlOpts: JXLEncodeOptions = { quality: options.quality, maxThreads: options.maxThreads, lossless: options.lossless, ...options.jxl };
+  const exrOpts: EXREncodeOptions = { maxThreads: options.maxThreads, ...options.exr };
 
   if (format === 'avif' && state.pools.avif && state.modules.avif) {
     type AvifData = Parameters<typeof state.modules.avif.encodeInWorker>[1];
@@ -387,6 +401,17 @@ export async function encodeInWorker(
       pixelData as JxlData,
       descriptor as JxlDesc,
       jxlOpts,
+    );
+  }
+
+  if (format === 'exr' && state.pools.exr && state.modules.exr) {
+    type ExrData = Parameters<typeof state.modules.exr.encodeInWorker>[1];
+    type ExrDesc = Parameters<typeof state.modules.exr.encodeInWorker>[2];
+    return state.modules.exr.encodeInWorker(
+      state.pools.exr,
+      pixelData as ExrData,
+      descriptor as ExrDesc,
+      exrOpts,
     );
   }
 
@@ -420,6 +445,7 @@ export async function transcodeInWorker(
 export function getWorkerPoolStats(client: AutoWorkerClient): {
   avif: ReturnType<AVIFWorkerClient['getStats']> | null;
   jxl: ReturnType<JXLWorkerClient['getStats']> | null;
+  exr: ReturnType<EXRWorkerClient['getStats']> | null;
   total: {
     poolSize: number;
     availableWorkers: number;
@@ -430,16 +456,18 @@ export function getWorkerPoolStats(client: AutoWorkerClient): {
 
   const avifStats = state?.pools.avif?.getStats() ?? null;
   const jxlStats = state?.pools.jxl?.getStats() ?? null;
+  const exrStats = state?.pools.exr?.getStats() ?? null;
 
   return {
     avif: avifStats,
     jxl: jxlStats,
+    exr: exrStats,
     total: {
-      poolSize: (avifStats?.poolSize ?? 0) + (jxlStats?.poolSize ?? 0),
+      poolSize: (avifStats?.poolSize ?? 0) + (jxlStats?.poolSize ?? 0) + (exrStats?.poolSize ?? 0),
       availableWorkers:
-        (avifStats?.availableWorkers ?? 0) + (jxlStats?.availableWorkers ?? 0),
+        (avifStats?.availableWorkers ?? 0) + (jxlStats?.availableWorkers ?? 0) + (exrStats?.availableWorkers ?? 0),
       queuedTasks:
-        (avifStats?.queuedTasks ?? 0) + (jxlStats?.queuedTasks ?? 0),
+        (avifStats?.queuedTasks ?? 0) + (jxlStats?.queuedTasks ?? 0) + (exrStats?.queuedTasks ?? 0),
     },
   };
 }
@@ -453,6 +481,7 @@ export function terminateWorkerPool(client: AutoWorkerClient): void {
 
   state.pools.avif?.terminate();
   state.pools.jxl?.terminate();
+  state.pools.exr?.terminate();
   state.pools = {};
   state.initPromises.clear();
   clientStates.delete(client);
@@ -467,7 +496,8 @@ export function isWorkerPoolInitialized(client: AutoWorkerClient): boolean {
 
   return (
     (state.pools.avif?.isInitialized() ?? false) ||
-    (state.pools.jxl?.isInitialized() ?? false)
+    (state.pools.jxl?.isInitialized() ?? false) ||
+    (state.pools.exr?.isInitialized() ?? false)
   );
 }
 
@@ -483,5 +513,6 @@ export function isCodecPoolInitialized(
 
   if (format === 'avif') return state.pools.avif?.isInitialized() ?? false;
   if (format === 'jxl') return state.pools.jxl?.isInitialized() ?? false;
+  if (format === 'exr') return state.pools.exr?.isInitialized() ?? false;
   return false;
 }

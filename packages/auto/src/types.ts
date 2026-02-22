@@ -1,5 +1,8 @@
 import type { ImageDescriptor } from '@dimkatet/jcodecs-core';
 import type { ImageFormat } from './format-detection';
+import type { AVIFImageData } from '@dimkatet/jcodecs-avif';
+import type { JXLImageData } from '@dimkatet/jcodecs-jxl';
+import type { EXRImageData } from '@dimkatet/jcodecs-exr';
 
 // ============================================================================
 // Unified image data — uses ImageDescriptor from core
@@ -38,7 +41,7 @@ export interface AutoImageInfo {
  */
 export function isAVIFImageData(
   data: AutoImageData,
-): data is AutoImageData & { format: 'avif' } {
+): data is AVIFImageData & { format: 'avif' } {
   return data.format === 'avif';
 }
 
@@ -47,8 +50,17 @@ export function isAVIFImageData(
  */
 export function isJXLImageData(
   data: AutoImageData,
-): data is AutoImageData & { format: 'jxl' } {
+): data is JXLImageData & { format: 'jxl' } {
   return data.format === 'jxl';
+}
+
+/**
+ * Type guard for EXR image data
+ */
+export function isEXRImageData(
+  data: AutoImageData,
+): data is EXRImageData & { format: 'exr'; } {
+  return data.format === 'exr';
 }
 
 // ============================================================================
@@ -57,4 +69,5 @@ export function isJXLImageData(
 
 export type { AVIFImageData, AVIFEncodeDescriptor } from '@dimkatet/jcodecs-avif';
 export type { JXLImageData, JXLEncodeDescriptor } from '@dimkatet/jcodecs-jxl';
+export type { EXRImageData, EXREncodeDescriptor } from '@dimkatet/jcodecs-exr';
 export type { ImageDescriptor } from '@dimkatet/jcodecs-core';
