@@ -17,18 +17,6 @@ import type { EXREncodeDescriptor, EXRFormatSpecific } from "@dimkatet/jcodecs-e
 import type { ImageDescriptor } from "@dimkatet/jcodecs-exr";
 
 /**
- * Load a test fixture file
- */
-async function loadFixture(filename: string): Promise<Uint8Array> {
-  const response = await fetch(`/${filename}`);
-  if (!response.ok) {
-    throw new Error(`Failed to load fixture: ${filename}`);
-  }
-  const buffer = await response.arrayBuffer();
-  return new Uint8Array(buffer);
-}
-
-/**
  * Create test float16 image data
  */
 function createTestFloat16ImageData(
