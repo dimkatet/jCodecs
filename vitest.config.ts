@@ -86,6 +86,28 @@ export default defineConfig({
           },
         }),
       ),
+
+      mergeConfig(
+        baseConfig,
+        defineProject({
+          publicDir: resolve(__dirname, "packages/exr/tests/fixtures"),
+          test: {
+            name: "exr",
+            root: "./packages/exr",
+            browser: {
+              instances: [{ browser: "chromium", name: "exr-chromium" }],
+            },
+          },
+          resolve: {
+            alias: {
+              "@dimkatet/jcodecs-exr": resolve(
+                __dirname,
+                "./packages/exr/dist/index.js",
+              ),
+            },
+          },
+        }),
+      ),
     ],
   },
 });

@@ -1,7 +1,7 @@
 {
-  "name": "@dimkatet/jcodecs-auto",
-  "version": "0.5.0",
-  "description": "Auto-detect image format and select codec for jCodecs",
+  "name": "@dimkatet/jcodecs-exr",
+  "version": "0.1.0",
+  "description": "OpenEXR encoder/decoder using OpenEXR 3.x compiled to WebAssembly",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -12,34 +12,41 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
-    "./decode": {
-      "types": "./dist/decode.d.ts",
-      "import": "./dist/decode.js",
-      "require": "./dist/decode.cjs"
-    },
     "./encode": {
       "types": "./dist/encode.d.ts",
       "import": "./dist/encode.js",
       "require": "./dist/encode.cjs"
+    },
+    "./decode": {
+      "types": "./dist/decode.d.ts",
+      "import": "./dist/decode.js",
+      "require": "./dist/decode.cjs"
     },
     "./worker": {
       "types": "./dist/worker-api.d.ts",
       "import": "./dist/worker-api.js",
       "require": "./dist/worker-api.cjs"
     },
-    "./format-detection": {
-      "types": "./dist/format-detection.d.ts",
-      "import": "./dist/format-detection.js",
-      "require": "./dist/format-detection.cjs"
-    }
+    "./worker-api": {
+      "types": "./dist/worker-api.d.ts",
+      "import": "./dist/worker-api.js",
+      "require": "./dist/worker-api.cjs"
+    },
+    "./urls": {
+      "types": "./dist/urls.d.ts",
+      "import": "./dist/urls.js",
+      "require": "./dist/urls.cjs"
+    },
+    "./wasm/*": "./dist/*"
   },
   "files": [
     "dist"
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsup",
-    "build:ts": "tsup",
+    "build": "pnpm build:wasm && pnpm build:ts",
+    "build:wasm": "docker build --target exr --output type=local,dest=src/wasm -f ../../Dockerfile ../..",
+    "build:ts": "tsup && cp src/wasm/*.js dist/",
     "dev": "tsup --watch",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
@@ -48,47 +55,30 @@
   "dependencies": {
     "@dimkatet/jcodecs-core": "workspace:*"
   },
-  "peerDependencies": {
-    "@dimkatet/jcodecs-avif": "workspace:*",
-    "@dimkatet/jcodecs-jxl": "workspace:*",
-    "@dimkatet/jcodecs-exr": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@dimkatet/jcodecs-avif": {
-      "optional": true
-    },
-    "@dimkatet/jcodecs-jxl": {
-      "optional": true
-    },
-    "@dimkatet/jcodecs-exr": {
-      "optional": true
-    }
-  },
   "devDependencies": {
-    "@dimkatet/jcodecs-avif": "workspace:*",
-    "@dimkatet/jcodecs-jxl": "workspace:*",
-    "@dimkatet/jcodecs-exr": "workspace:*",
+    "@types/emscripten": "^1.39.10",
     "tsup": "^8.0.0",
     "typescript": "^5.4.0",
     "vitest": "^4.0.18"
   },
   "keywords": [
-    "avif",
-    "jxl",
-    "jpeg-xl",
-    "exr",
     "openexr",
+    "exr",
     "image",
     "codec",
-    "auto-detect",
+    "encoder",
+    "decoder",
     "wasm",
-    "hdr"
+    "webassembly",
+    "hdr",
+    "float16",
+    "float32"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/dimkatet/jCodecs.git",
-    "directory": "packages/auto"
+    "directory": "packages/exr"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"

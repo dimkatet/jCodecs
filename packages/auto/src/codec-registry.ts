@@ -169,6 +169,43 @@ async function tryRegisterJXL(): Promise<void> {
   }
 }
 
+async function tryRegisterEXR(): Promise<void> {
+  try {
+    const exr = await import('@dimkatet/jcodecs-exr');
+
+    registerCodec('exr', async () => ({
+      decode: exr.decode,
+      decodeToImageData: exr.decodeToImageData,
+      encode: exr.encode,
+      // Adapt encodeSimple: ImageData (uint8) -> EXR (float32)
+      encodeSimple: async (imageData: ImageData, _quality?: number) => {
+        const { width, height, data } = imageData;
+        const float32Data = new Float32Array(data.length);
+
+        // Convert uint8 [0-255] to float32 [0-1]
+        for (let i = 0; i < data.length; i++) {
+          float32Data[i] = data[i] / 255;
+        }
+
+        const descriptor: import('@dimkatet/jcodecs-exr').EXREncodeDescriptor = {
+          geometry: { width, height },
+          channels: { model: 'rgba', count: 4 },
+          numeric: { dataType: 'float32' },
+        };
+
+        return exr.encode(float32Data, descriptor, { compression: 'zip' });
+      },
+      getImageInfo: exr.getImageInfo,
+      initDecoder: exr.initDecoder,
+      initEncoder: exr.initEncoder,
+      isDecoderInitialized: exr.isDecoderInitialized,
+      isEncoderInitialized: exr.isEncoderInitialized,
+    }));
+  } catch {
+    // Package not installed, skip registration
+  }
+}
+
 // ============================================================================
 // Initialization
 // ============================================================================
@@ -184,6 +221,7 @@ export async function ensureCodecsRegistered(): Promise<void> {
     registrationPromise = Promise.all([
       tryRegisterAVIF(),
       tryRegisterJXL(),
+      tryRegisterEXR(),
     ]).then(() => undefined);
   }
   return registrationPromise;

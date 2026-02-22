@@ -6,6 +6,7 @@
 #   docker build --target core --output packages/core/src/wasm .
 #   docker build --target avif --output packages/avif/src/wasm .
 #   docker build --target jxl --output packages/jxl/src/wasm .
+#   docker build --target exr --output packages/exr/src/wasm .
 # =============================================================================
 
 # === BASE: Emscripten + build tools ===
@@ -264,3 +265,73 @@ COPY --from=jxl-build /build/jxl-wasm/jxl_enc.js /
 COPY --from=jxl-build /build/jxl-wasm/jxl_enc.d.ts /
 COPY --from=jxl-build /build/jxl-wasm/jxl_enc_mt.js /
 COPY --from=jxl-build /build/jxl-wasm/jxl_enc_mt.d.ts /
+
+# === EXR: OpenEXR 3.x encoder/decoder ===
+FROM jcodecs-core AS exr-build
+
+ARG IMATH_VERSION=v3.1.12
+ARG OPENEXR_VERSION=v3.3.2
+
+# Build Imath (static)
+WORKDIR /src
+RUN git clone --depth 1 --branch ${IMATH_VERSION} https://github.com/AcademySoftwareFoundation/Imath.git
+
+WORKDIR /build/imath
+RUN emcmake cmake /src/Imath \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_FLAGS="-pthread -msimd128" \
+    -DCMAKE_CXX_FLAGS="-pthread -msimd128" \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DBUILD_TESTING=OFF \
+    -DPYTHON=OFF \
+    -G Ninja \
+    && ninja
+
+# Build OpenEXR (static, with Emscripten's zlib)
+WORKDIR /src
+RUN git clone --depth 1 --branch ${OPENEXR_VERSION} https://github.com/AcademySoftwareFoundation/openexr.git
+
+WORKDIR /build/openexr
+RUN emcmake cmake /src/openexr \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_FLAGS="-pthread -msimd128 -s USE_ZLIB=1" \
+    -DCMAKE_CXX_FLAGS="-pthread -msimd128 -s USE_ZLIB=1" \
+    -DCMAKE_PREFIX_PATH="/build/imath" \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DBUILD_TESTING=OFF \
+    -DOPENEXR_BUILD_TOOLS=OFF \
+    -DOPENEXR_BUILD_EXAMPLES=OFF \
+    -DOPENEXR_INSTALL_EXAMPLES=OFF \
+    -G Ninja \
+    && ninja
+
+# Copy WASM source and build
+COPY packages/exr/src/wasm /src/exr-wasm
+
+WORKDIR /build/exr-wasm
+RUN emcmake cmake /src/exr-wasm \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DOPENEXR_LIB="/build/openexr/src/lib/OpenEXR/libOpenEXR-3_3.a" \
+    -DOPENEXR_CORE_LIB="/build/openexr/src/lib/OpenEXRCore/libOpenEXRCore-3_3.a" \
+    -DOPENEXR_UTIL_LIB="/build/openexr/src/lib/OpenEXRUtil/libOpenEXRUtil-3_3.a" \
+    -DILMTHREAD_LIB="/build/openexr/src/lib/IlmThread/libIlmThread-3_3.a" \
+    -DIEX_LIB="/build/openexr/src/lib/Iex/libIex-3_3.a" \
+    -DIMATH_LIB="/build/imath/src/Imath/libImath-3_1.a" \
+    -DOPENEXR_INCLUDE="/src/openexr/src/lib/OpenEXR;/src/openexr/src/lib/OpenEXRCore;/src/openexr/src/lib/Iex;/src/openexr/src/lib/IlmThread;/build/openexr/cmake" \
+    -DIMATH_INCLUDE="/src/Imath/src/Imath;/build/imath/config;/build/imath/src/Imath" \
+    -DJCODECS_CORE_LIB="/build/jcodecs-core/libjcodecs_core.a" \
+    -DJCODECS_CORE_INCLUDE="/src/jcodecs-core" \
+    -DBUILD_MT=ON \
+    -G Ninja \
+    && ninja
+
+# === EXR: Output stage (only artifacts) ===
+FROM scratch AS exr
+COPY --from=exr-build /build/exr-wasm/exr_dec.js /
+COPY --from=exr-build /build/exr-wasm/exr_dec.d.ts /
+COPY --from=exr-build /build/exr-wasm/exr_dec_mt.js /
+COPY --from=exr-build /build/exr-wasm/exr_dec_mt.d.ts /
+COPY --from=exr-build /build/exr-wasm/exr_enc.js /
+COPY --from=exr-build /build/exr-wasm/exr_enc.d.ts /
+COPY --from=exr-build /build/exr-wasm/exr_enc_mt.js /
+COPY --from=exr-build /build/exr-wasm/exr_enc_mt.d.ts /
