@@ -1,5 +1,18 @@
 # @dimkatet/jcodecs-exr
 
+## 0.2.1
+
+### Patch Changes
+
+- Fix dynamic WASM import failing inside Web Workers
+
+  Vite's `importAnalysis` plugin replaces `import(url)` with `__vite__wrapDynamicImport(...)` in dev mode. This helper is only available on the main thread — it's `undefined` inside Web Workers, causing all `createWorkerPool()` calls to fail with "Cannot read properties of undefined (reading 'wrapDynamicImport')".
+
+  Added `importModule<T>(url)` utility to `@dimkatet/jcodecs-core` that wraps the dynamic import in `new Function` to escape bundler transforms. All codec packages now use it instead of bare `import(/* @vite-ignore */ url)`.
+
+- Updated dependencies
+  - @dimkatet/jcodecs-core@0.7.1
+
 ## 0.2.0
 
 ### Minor Changes

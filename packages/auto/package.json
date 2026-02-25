@@ -1,6 +1,6 @@
 {
   "name": "@dimkatet/jcodecs-auto",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Auto-detect image format and select codec for jCodecs",
   "type": "module",
   "main": "./dist/index.cjs",
