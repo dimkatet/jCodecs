@@ -92,12 +92,7 @@ const simple = await encodeSimple(imageData, 'piz');
 ### Worker Pool
 
 ```typescript
-import {
-  createWorkerPool,
-  encodeInWorker,
-  decodeInWorker,
-  terminateWorkerPool,
-} from '@dimkatet/jcodecs-exr';
+import { createWorkerPool } from '@dimkatet/jcodecs-exr';
 
 const pool = await createWorkerPool({
   type: 'decoder',
@@ -105,10 +100,10 @@ const pool = await createWorkerPool({
   preferMT: true,
 });
 
-const { data, descriptor } = await decodeInWorker(pool, exrBytes);
-const encoded = await encodeInWorker(pool, data, descriptor, { compression: 'zip' });
+const { data, descriptor } = await pool.decode(exrBytes);
+const encoded = await pool.encode(data, descriptor, { compression: 'zip' });
 
-terminateWorkerPool(pool);
+pool.terminate();
 ```
 
 ## API Reference
@@ -192,12 +187,14 @@ interface WorkerPoolConfig {
   lazyInit?: boolean;
 }
 
-createWorkerPool(config?: WorkerPoolConfig): Promise<EXRWorkerClient>
-decodeInWorker(client, input, options?): Promise<{ data; descriptor }>
-encodeInWorker(client, data, descriptor, options?): Promise<Uint8Array>
-getWorkerPoolStats(client): PoolStats
-terminateWorkerPool(client): void
-isWorkerPoolInitialized(client): boolean
+createWorkerPool(config?: WorkerPoolConfig): Promise<EXRWorkerHandle>
+
+// Pool methods
+pool.decode(input, options?): Promise<{ data; descriptor }>
+pool.encode(data, descriptor, options?): Promise<Uint8Array>
+pool.getStats(): PoolStats
+pool.terminate(): void
+pool.isInitialized(): boolean
 ```
 
 ### Init

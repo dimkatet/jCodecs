@@ -147,16 +147,23 @@ isCodecAvailable('exr');  // true if @dimkatet/jcodecs-exr is installed
 const formats = getAvailableFormats(); // e.g. ['avif', 'jxl', 'exr']
 ```
 
-### Worker Pool
+## Vite
+
+Add codec packages to `optimizeDeps.exclude` — without this, workers fail silently in dev mode:
+
+```ts
+// vite.config.ts
+export default {
+  optimizeDeps: {
+    exclude: ['@dimkatet/jcodecs-avif', '@dimkatet/jcodecs-jxl', '@dimkatet/jcodecs-exr'],
+  },
+}
+```
+
+## Worker Pool
 
 ```typescript
-import {
-  createWorkerPool,
-  decodeInWorker,
-  encodeInWorker,
-  transcodeInWorker,
-  terminateWorkerPool,
-} from '@dimkatet/jcodecs-auto';
+import { createWorkerPool } from '@dimkatet/jcodecs-auto';
 
 const pool = await createWorkerPool({
   poolSize: 4,
@@ -167,18 +174,11 @@ const pool = await createWorkerPool({
   exr:  { poolSize: 2 },
 });
 
-// Decode (format auto-detected)
-const decoded = await decodeInWorker(pool, buffer);
-
-// Encode in worker
-const encoded = await encodeInWorker(pool, decoded, { format: 'jxl', quality: 85 });
-
-// Transcode in worker (decode + encode in single call)
-const transcoded = await transcodeInWorker(pool, avifBuffer, 'exr', {
-  exr: { compression: 'piz' },
-});
-
-terminateWorkerPool(pool);
+// Method style
+const decoded = await pool.decode(buffer);
+const encoded = await pool.encode(decoded, { format: 'jxl', quality: 85 });
+const transcoded = await pool.transcode(avifBuffer, 'exr', { exr: { compression: 'piz' } });
+pool.terminate();
 ```
 
 ## API Reference
@@ -289,6 +289,36 @@ interface AutoImageInfo {
 isAVIFImageData(data: AutoImageData): boolean
 isJXLImageData(data: AutoImageData): boolean
 isEXRImageData(data: AutoImageData): boolean
+```
+
+### Worker Pool API
+
+```typescript
+interface AutoWorkerPoolConfig {
+  poolSize?: number;
+  preferMT?: boolean;
+  formats?: ImageFormat[];        // Limit to specific formats
+  avif?: WorkerPoolConfig;        // AVIF-specific overrides
+  jxl?: WorkerPoolConfig;
+  exr?: WorkerPoolConfig;
+}
+
+createWorkerPool(config?: AutoWorkerPoolConfig): Promise<AutoWorkerClient>
+
+// Pool methods
+pool.decode(input, options?): Promise<AutoImageData>
+pool.encode(input, options): Promise<Uint8Array>
+pool.transcode(input, targetFormat, options?): Promise<Uint8Array>
+pool.getStats(): { avif, jxl, exr, total }
+pool.terminate(): void
+pool.isInitialized(): boolean
+pool.isCodecInitialized(format): boolean
+
+// Per-codec pool access
+pool.avif?: AVIFWorkerHandle
+pool.jxl?: JXLWorkerHandle
+pool.exr?: EXRWorkerHandle
+pool.availableCodecs: readonly ImageFormat[]
 ```
 
 ## Error Handling

@@ -89,12 +89,7 @@ const simple = await encodeSimple(imageData, 85);
 ### Worker Pool
 
 ```typescript
-import {
-  createWorkerPool,
-  encodeInWorker,
-  decodeInWorker,
-  terminateWorkerPool,
-} from '@dimkatet/jcodecs-jxl';
+import { createWorkerPool } from '@dimkatet/jcodecs-jxl';
 
 const pool = await createWorkerPool({
   type: 'decoder',
@@ -102,9 +97,10 @@ const pool = await createWorkerPool({
   preferMT: true,
 });
 
-const { data, descriptor } = await decodeInWorker(pool, jxlBytes);
+const { data, descriptor } = await pool.decode(jxlBytes);
+const encoded = await pool.encode(data, descriptor, { quality: 85, effort: 7 });
 
-terminateWorkerPool(pool);
+pool.terminate();
 ```
 
 ## API Reference
@@ -184,10 +180,14 @@ interface WorkerPoolConfig {
   lazyInit?: boolean;
 }
 
-createWorkerPool(config?: WorkerPoolConfig): Promise<JXLWorkerClient>
-decodeInWorker(client, input, options?): Promise<{ data; descriptor }>
-encodeInWorker(client, data, descriptor, options?): Promise<Uint8Array>
-terminateWorkerPool(client): void
+createWorkerPool(config?: WorkerPoolConfig): Promise<JXLWorkerHandle>
+
+// Pool methods
+pool.decode(input, options?): Promise<{ data; descriptor }>
+pool.encode(data, descriptor, options?): Promise<Uint8Array>
+pool.getStats(): PoolStats
+pool.terminate(): void
+pool.isInitialized(): boolean
 ```
 
 ### Init

@@ -89,12 +89,7 @@ const simple = await encodeSimple(imageData, 80);
 ### Worker Pool
 
 ```typescript
-import {
-  createWorkerPool,
-  encodeInWorker,
-  decodeInWorker,
-  terminateWorkerPool,
-} from '@dimkatet/jcodecs-avif';
+import { createWorkerPool } from '@dimkatet/jcodecs-avif';
 
 // Decoder pool (multi-threaded WASM, 4 workers)
 const pool = await createWorkerPool({
@@ -103,9 +98,10 @@ const pool = await createWorkerPool({
   preferMT: true,
 });
 
-const { data, descriptor } = await decodeInWorker(pool, avifBytes);
+const { data, descriptor } = await pool.decode(avifBytes);
+const encoded = await pool.encode(data, descriptor, { quality: 80 });
 
-terminateWorkerPool(pool);
+pool.terminate();
 ```
 
 ## API Reference
@@ -187,12 +183,14 @@ interface WorkerPoolConfig {
   lazyInit?: boolean;                      // Delay WASM init (default: false)
 }
 
-createWorkerPool(config?: WorkerPoolConfig): Promise<AVIFWorkerClient>
-decodeInWorker(client, input, options?): Promise<{ data; descriptor }>
-encodeInWorker(client, data, descriptor, options?): Promise<Uint8Array>
-getWorkerPoolStats(client): PoolStats
-terminateWorkerPool(client): void
-isWorkerPoolInitialized(client): boolean
+createWorkerPool(config?: WorkerPoolConfig): Promise<AVIFWorkerHandle>
+
+// Pool methods
+pool.decode(input, options?): Promise<{ data; descriptor }>
+pool.encode(data, descriptor, options?): Promise<Uint8Array>
+pool.getStats(): PoolStats
+pool.terminate(): void
+pool.isInitialized(): boolean
 ```
 
 ### Init
