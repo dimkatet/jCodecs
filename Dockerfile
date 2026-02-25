@@ -7,6 +7,7 @@
 #   docker build --target avif --output packages/avif/src/wasm .
 #   docker build --target jxl --output packages/jxl/src/wasm .
 #   docker build --target exr --output packages/exr/src/wasm .
+#   docker build --target processing --output packages/processing/src/wasm .
 # =============================================================================
 
 # === BASE: Emscripten + build tools ===
@@ -335,3 +336,26 @@ COPY --from=exr-build /build/exr-wasm/exr_enc.js /
 COPY --from=exr-build /build/exr-wasm/exr_enc.d.ts /
 COPY --from=exr-build /build/exr-wasm/exr_enc_mt.js /
 COPY --from=exr-build /build/exr-wasm/exr_enc_mt.d.ts /
+
+# === PROCESSING: img_process (stb_image_resize2 + custom crop/rotate) ===
+FROM base AS processing-build
+
+ARG STB_VERSION=master
+
+# Fetch only stb_image_resize2.h (sparse clone — no full stb repo download)
+RUN git clone --depth 1 --filter=blob:none --sparse \
+    https://github.com/nothings/stb.git /src/stb \
+    && cd /src/stb && git sparse-checkout set stb_image_resize2.h
+
+COPY packages/processing/src/wasm /src/processing/
+
+WORKDIR /build/processing
+RUN emcmake cmake /src/processing \
+    -DSTB_INCLUDE="/src/stb" \
+    -G Ninja \
+    && ninja
+
+# === PROCESSING: Output stage (only artifacts) ===
+FROM scratch AS processing
+COPY --from=processing-build /build/processing/img_process.js /
+COPY --from=processing-build /build/processing/img_process.d.ts /

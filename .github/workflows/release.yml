@@ -48,6 +48,13 @@ jobs:
           key: wasm-exr-${{ hashFiles('packages/exr/src/wasm/*.cpp', 'packages/exr/src/wasm/CMakeLists.txt', 'Dockerfile', 'emscripten-cross.txt') }}
           fail-on-cache-miss: true
 
+      - name: Restore processing WASM from cache
+        uses: actions/cache/restore@v4
+        with:
+          path: packages/processing/src/wasm/*.js
+          key: wasm-processing-${{ hashFiles('packages/processing/src/wasm/*.cpp', 'packages/processing/src/wasm/CMakeLists.txt', 'Dockerfile', 'emscripten-cross.txt') }}
+          fail-on-cache-miss: true
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 

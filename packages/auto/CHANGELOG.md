@@ -1,5 +1,15 @@
 # @dimkatet/jcodecs-auto
 
+## 0.6.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @dimkatet/jcodecs-core@0.7.1
+  - @dimkatet/jcodecs-avif@0.7.1
+  - @dimkatet/jcodecs-jxl@0.4.1
+  - @dimkatet/jcodecs-exr@0.2.1
+
 ## 0.6.0
 
 ### Minor Changes

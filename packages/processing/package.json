@@ -1,7 +1,7 @@
 {
-  "name": "@dimkatet/jcodecs-jxl",
-  "version": "0.4.1",
-  "description": "JPEG-XL encoder/decoder using libjxl compiled to WebAssembly",
+  "name": "@dimkatet/jcodecs-processing",
+  "version": "0.1.1",
+  "description": "Image processing operations (resize, crop, rotate) compiled to WebAssembly",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -12,15 +12,20 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
-    "./encode": {
-      "types": "./dist/encode.d.ts",
-      "import": "./dist/encode.js",
-      "require": "./dist/encode.cjs"
+    "./resize": {
+      "types": "./dist/resize.d.ts",
+      "import": "./dist/resize.js",
+      "require": "./dist/resize.cjs"
     },
-    "./decode": {
-      "types": "./dist/decode.d.ts",
-      "import": "./dist/decode.js",
-      "require": "./dist/decode.cjs"
+    "./crop": {
+      "types": "./dist/crop.d.ts",
+      "import": "./dist/crop.js",
+      "require": "./dist/crop.cjs"
+    },
+    "./rotate": {
+      "types": "./dist/rotate.d.ts",
+      "import": "./dist/rotate.js",
+      "require": "./dist/rotate.cjs"
     },
     "./worker": {
       "types": "./dist/worker-api.d.ts",
@@ -45,7 +50,7 @@
   "sideEffects": false,
   "scripts": {
     "build": "pnpm build:wasm && pnpm build:ts",
-    "build:wasm": "docker build --target jxl --output type=local,dest=src/wasm -f ../../Dockerfile ../..",
+    "build:wasm": "docker build --target processing --output type=local,dest=src/wasm -f ../../Dockerfile ../..",
     "build:ts": "tsup && cp src/wasm/*.js dist/",
     "dev": "tsup --watch",
     "test": "vitest run",
@@ -53,8 +58,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@dimkatet/jcodecs-core": "workspace:*",
-    "valibot": "^1.2.0"
+    "@dimkatet/jcodecs-core": "workspace:*"
   },
   "devDependencies": {
     "@types/emscripten": "^1.39.10",
@@ -63,22 +67,21 @@
     "vitest": "^4.0.18"
   },
   "keywords": [
-    "jpegxl",
-    "jxl",
     "image",
-    "codec",
-    "encoder",
-    "decoder",
+    "resize",
+    "crop",
+    "rotate",
+    "processing",
     "wasm",
     "webassembly",
-    "libjxl",
-    "hdr"
+    "hdr",
+    "stb"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/dimkatet/jCodecs.git",
-    "directory": "packages/jxl"
+    "directory": "packages/processing"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"

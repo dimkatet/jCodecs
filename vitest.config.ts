@@ -108,6 +108,28 @@ export default defineConfig({
           },
         }),
       ),
+
+      mergeConfig(
+        baseConfig,
+        defineProject({
+          test: {
+            name: "processing",
+            root: "./packages/processing",
+            browser: {
+              enabled: true,
+              instances: [{ browser: "chromium", name: "processing-chromium" }],
+            },
+          },
+          resolve: {
+            alias: {
+              "@dimkatet/jcodecs-processing": resolve(
+                __dirname,
+                "./packages/processing/dist/index.js",
+              ),
+            },
+          },
+        }),
+      ),
     ],
   },
 });

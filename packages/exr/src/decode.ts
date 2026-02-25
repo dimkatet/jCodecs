@@ -2,6 +2,7 @@ import type { ImageDescriptor } from "@dimkatet/jcodecs-core";
 import {
   copyFromWasmByType,
   copyToWasm,
+  importModule,
   isMultiThreadSupported,
   normalizeDescriptor,
   validateThreadCount,
@@ -54,7 +55,7 @@ export async function init({ jsUrl, preferMT }: InitConfig = {}): Promise<void> 
       mainScriptUrlOrBlob: isMultiThreadedModule ? url : undefined,
     };
 
-    const module: WasmModule = await import(/* @vite-ignore */ url);
+    const module = await importModule<WasmModule>(url);
     const createModule = module.default;
     decoderModule = await createModule(moduleConfig);
     maxThreads = decoderModule.MAX_THREADS ?? 1;
