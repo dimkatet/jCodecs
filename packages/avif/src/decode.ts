@@ -1,4 +1,5 @@
 import {
+  importModule,
   isMultiThreadSupported,
   validateThreadCount,
   copyToWasm,
@@ -47,7 +48,7 @@ export async function init({ jsUrl, preferMT }: InitConfig = {}): Promise<void> 
       mainScriptUrlOrBlob: isMultiThreadedModule ? url : undefined,
     };
 
-    const module: WasmModule = await import(/* @vite-ignore */ url);
+    const module = await importModule<WasmModule>(url);
     const createModule = module.default;
     decoderModule = await createModule(moduleConfig);
     maxThreads = decoderModule.MAX_THREADS ?? 1;

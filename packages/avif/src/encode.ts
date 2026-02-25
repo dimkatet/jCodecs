@@ -1,5 +1,6 @@
 import {
   copyToWasm,
+  importModule,
   isMultiThreadSupported,
   validateThreadCount,
 } from "@dimkatet/jcodecs-core";
@@ -47,7 +48,7 @@ export async function init({
     const moduleConfig: Record<string, unknown> = {
       mainScriptUrlOrBlob: isMultiThreadedModule ? url : undefined,
     };
-    const module: WasmModule = await import(/* @vite-ignore */ url);
+    const module = await importModule<WasmModule>(url);
     const createModule = module.default;
     encoderModule = await createModule(moduleConfig);
     maxThreads = encoderModule.MAX_THREADS ?? 1;

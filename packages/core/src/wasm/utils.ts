@@ -9,6 +9,21 @@ import type { WASMModule } from "./memory";
 import type { DataType } from "../types";
 
 /**
+ * Dynamically imports a module by URL, bypassing bundler transform pipelines.
+ *
+ * Uses `new Function` to hide the `import()` call from static analysis.
+ * Without this, bundlers like Vite inject `__vite__wrapDynamicImport` which is
+ * only available on the main thread — causing "undefined is not an object
+ * (reading 'wrapDynamicImport')" errors inside Web Workers.
+ *
+ * @param url - URL of the ES module to import
+ * @returns The module's namespace object typed as T
+ */
+export function importModule<T>(url: string): Promise<T> {
+  return (new Function('u', 'return import(u)') as (u: string) => Promise<T>)(url);
+}
+
+/**
  * Maps DataType to corresponding TypedArray type
  */
 type TypedArrayForDataType<T extends DataType> =
