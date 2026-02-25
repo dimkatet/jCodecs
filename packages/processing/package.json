@@ -1,0 +1,89 @@
+{
+  "name": "@dimkatet/jcodecs-processing",
+  "version": "0.1.1",
+  "description": "Image processing operations (resize, crop, rotate) compiled to WebAssembly",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./resize": {
+      "types": "./dist/resize.d.ts",
+      "import": "./dist/resize.js",
+      "require": "./dist/resize.cjs"
+    },
+    "./crop": {
+      "types": "./dist/crop.d.ts",
+      "import": "./dist/crop.js",
+      "require": "./dist/crop.cjs"
+    },
+    "./rotate": {
+      "types": "./dist/rotate.d.ts",
+      "import": "./dist/rotate.js",
+      "require": "./dist/rotate.cjs"
+    },
+    "./worker": {
+      "types": "./dist/worker-api.d.ts",
+      "import": "./dist/worker-api.js",
+      "require": "./dist/worker-api.cjs"
+    },
+    "./worker-api": {
+      "types": "./dist/worker-api.d.ts",
+      "import": "./dist/worker-api.js",
+      "require": "./dist/worker-api.cjs"
+    },
+    "./urls": {
+      "types": "./dist/urls.d.ts",
+      "import": "./dist/urls.js",
+      "require": "./dist/urls.cjs"
+    },
+    "./wasm/*": "./dist/*"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "pnpm build:wasm && pnpm build:ts",
+    "build:wasm": "docker build --target processing --output type=local,dest=src/wasm -f ../../Dockerfile ../..",
+    "build:ts": "tsup && cp src/wasm/*.js dist/",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@dimkatet/jcodecs-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/emscripten": "^1.39.10",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.0.18"
+  },
+  "keywords": [
+    "image",
+    "resize",
+    "crop",
+    "rotate",
+    "processing",
+    "wasm",
+    "webassembly",
+    "hdr",
+    "stb"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dimkatet/jCodecs.git",
+    "directory": "packages/processing"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
+}

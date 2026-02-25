@@ -1,0 +1,37 @@
+// TypeScript bindings for emscripten-generated code.  Automatically generated at compile time.
+declare namespace RuntimeExports {
+    /**
+     * @param {string|null=} returnType
+     * @param {Array=} argTypes
+     * @param {Array=} args
+     * @param {Object=} opts
+     */
+    function ccall(ident: any, returnType?: (string | null) | undefined, argTypes?: any[] | undefined, args?: any[] | undefined, opts?: any | undefined): any;
+    /**
+     * @param {string=} returnType
+     * @param {Array=} argTypes
+     * @param {Object=} opts
+     */
+    function cwrap(ident: any, returnType?: string | undefined, argTypes?: any[] | undefined, opts?: any | undefined): any;
+    let HEAPU8: any;
+}
+interface WasmModule {
+  _malloc(_0: number): number;
+  _free(_0: number): void;
+}
+
+type EmbindString = ArrayBuffer|Uint8Array|Uint8ClampedArray|Int8Array|string;
+export type ProcessResult = {
+  dataPtr: number,
+  dataSize: number,
+  error: EmbindString
+};
+
+interface EmbindModule {
+  crop(_0: number, _1: number, _2: number, _3: number, _4: number, _5: number, _6: number, _7: number, _8: number): ProcessResult;
+  rotate(_0: number, _1: number, _2: number, _3: number, _4: number, _5: number): ProcessResult;
+  resize(_0: number, _1: number, _2: number, _3: number, _4: number, _5: number, _6: number, _7: EmbindString, _8: EmbindString, _9: EmbindString): ProcessResult;
+}
+
+export type MainModule = WasmModule & typeof RuntimeExports & EmbindModule;
+export default function MainModuleFactory (options?: unknown): Promise<MainModule>;
