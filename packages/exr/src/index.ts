@@ -38,16 +38,9 @@ export type {
 } from './types';
 
 // Worker API
-export {
-  createWorkerPool,
-  encodeInWorker,
-  decodeInWorker,
-  getWorkerPoolStats,
-  terminateWorkerPool,
-  isWorkerPoolInitialized,
-} from './worker-api';
+export { createWorkerPool } from './worker-api';
 
-export type { WorkerPoolConfig, EXRWorkerClient } from './worker-api';
+export type { WorkerPoolConfig, EXRWorkerHandle, EXRWorkerClient } from './worker-api';
 
 // Re-export from core
 export { isMultiThreadSupported } from '@dimkatet/jcodecs-core';

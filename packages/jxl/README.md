@@ -1,92 +1,95 @@
-# @jcodecs/jxl
+# @dimkatet/jcodecs-jxl
 
 JPEG-XL encoder/decoder for browsers via WebAssembly.
 
-Built with [libjxl](https://github.com/libjxl/libjxl).
+Built with [libjxl](https://github.com/libjxl/libjxl) 0.11.x.
 
 ## Installation
 
 ```bash
-npm install @jcodecs/jxl
+npm install @dimkatet/jcodecs-jxl
 ```
 
 ## Features
 
-- **HDR Support** - float16, float32, 8/10/12/16-bit integer
-- **Auto-detection** - Decoder automatically detects format from file
-- **Wide Color Gamut** - sRGB, Display-P3, Rec.2020
-- **Transfer Functions** - sRGB, PQ (HDR10), HLG, Linear
-- **Multi-threaded** - Up to 8 threads via SharedArrayBuffer
-- **Progressive** - Optional progressive decoding support
-- **Lossless** - Full lossless compression support
+- All pixel formats: uint8, uint16, float16, float32
+- Decoder auto-detects format from the file (no manual selection needed)
+- Wide color gamut: sRGB, Display-P3, Rec.2020
+- Transfer functions: sRGB, PQ (HDR10), HLG, Linear
+- Lossless compression
+- Progressive decoding support
+- Multi-threaded encoding/decoding (up to 8 threads)
+- Non-blocking Worker Pool API
 
 ## Quick Start
 
 ### Decode
 
 ```typescript
-import { decode, decodeToImageData } from '@jcodecs/jxl';
+import { decode, decodeToImageData, getImageInfo } from '@dimkatet/jcodecs-jxl';
 
-// Decode (auto-detects format)
 const jxlBytes = await fetch('image.jxl').then(r => r.arrayBuffer());
-const decoded = await decode(new Uint8Array(jxlBytes));
 
-console.log(decoded.dataType);  // 'uint8' | 'uint16' | 'float16' | 'float32'
-console.log(decoded.data);      // Uint8Array | Uint16Array | Float16Array | Float32Array
-console.log(decoded.metadata.isHDR);
-console.log(decoded.metadata.transferFunction);
+// Decode to CodecImageData — format auto-detected from file
+const { data, descriptor } = await decode(new Uint8Array(jxlBytes));
 
-// Decode to standard ImageData (8-bit sRGB)
+console.log(descriptor.numeric.dataType);      // 'uint8' | 'uint16' | 'float16' | 'float32'
+console.log(descriptor.numeric.bitDepth);      // 8 | 10 | 12 | 16 | 32
+console.log(descriptor.geometry.width);
+console.log(descriptor.color?.primaries);      // 'bt709' | 'bt2020' | 'displayP3'
+console.log(descriptor.transfer?.function);    // 'srgb' | 'pq' | 'hlg' | 'linear'
+
+// Decode to standard ImageData (8-bit sRGB, for canvas)
 const imageData = await decodeToImageData(jxlBytes);
 ctx.putImageData(imageData, 0, 0);
+
+// Read metadata without full decode
+const info = await getImageInfo(jxlBytes);
 ```
 
 ### Encode
 
 ```typescript
-import { encode } from '@jcodecs/jxl';
+import { encode, encodeSimple } from '@dimkatet/jcodecs-jxl';
 
-// Basic encoding
-const encoded = await encode(imageData, {
-  quality: 85,
-  effort: 7,
-});
-
-// HDR float encoding
-const hdrData = {
-  data: new Float16Array(width * height * 4),
-  dataType: 'float16',
-  width,
-  height,
-  channels: 4,
-  bitDepth: 16,
-  metadata: {
-    colorPrimaries: 'bt2020',
-    transferFunction: 'pq',
-    isHDR: true,
+// Full API — encode TypedArray with an explicit descriptor
+const encoded = await encode(
+  data,  // Uint8Array | Uint16Array | Float16Array | Float32Array
+  {
+    geometry: { width: 1920, height: 1080 },
+    channels: { model: 'rgba', count: 4 },
+    numeric: { dataType: 'uint8' },
+    color: { primaries: 'bt709' },
+    transfer: { function: 'srgb' },
   },
-};
+  { quality: 85, effort: 7 },
+);
 
-const hdrEncoded = await encode(hdrData, {
-  quality: 90,
-  effort: 7,
-  colorSpace: 'rec2020',
-  transferFunction: 'pq',
-});
+// HDR float32 encode
+const hdrEncoded = await encode(
+  float32Data,
+  {
+    geometry: { width, height },
+    channels: { model: 'rgb', count: 3 },
+    numeric: { dataType: 'float32' },
+    color: { primaries: 'bt2020' },
+    transfer: { function: 'pq' },
+    hdr: { maxCLL: 1000, maxPALL: 400 },
+  },
+  { quality: 90, effort: 9 },
+);
 
-// Lossless encoding
-const lossless = await encode(imageData, { lossless: true });
+// Lossless encode
+const lossless = await encode(data, descriptor, { lossless: true });
+
+// Simple API — encode from standard ImageData
+const simple = await encodeSimple(imageData, 85);
 ```
 
 ### Worker Pool
 
 ```typescript
-import {
-  createWorkerPool,
-  encodeInWorker,
-  decodeInWorker,
-  terminateWorkerPool,
-} from '@jcodecs/jxl';
+import { createWorkerPool } from '@dimkatet/jcodecs-jxl';
 
 const pool = await createWorkerPool({
   type: 'decoder',
@@ -94,57 +97,77 @@ const pool = await createWorkerPool({
   preferMT: true,
 });
 
-const decoded = await decodeInWorker(pool, jxlBytes);
+const { data, descriptor } = await pool.decode(jxlBytes);
+const encoded = await pool.encode(data, descriptor, { quality: 85, effort: 7 });
 
-terminateWorkerPool(pool);
+pool.terminate();
 ```
 
 ## API Reference
 
-### `decode(data, options?, config?)`
-
-Decode JXL to ExtendedImageData. Format is auto-detected from file.
+### `decode(input, options?, config?)`
 
 ```typescript
+decode(
+  input: Uint8Array | ArrayBuffer,
+  options?: JXLDecodeOptions,
+  config?: InitConfig,
+): Promise<{ data: Uint8Array | Uint16Array | Float16Array | Float32Array; descriptor: ImageDescriptor }>
+
 interface JXLDecodeOptions {
-  maxThreads?: number;           // Max threads (default: 0 = auto, max: 8)
-  ignoreColorProfile?: boolean;  // Ignore ICC profile
+  maxThreads?: number;           // 0 = auto (default), max: 8
+  ignoreColorProfile?: boolean;  // Ignore ICC profile (default: false)
 }
-
-const decoded = await decode(jxlBytes, { maxThreads: 4 });
-// decoded.data: Uint8Array | Uint16Array | Float16Array | Float32Array
-// decoded.dataType: 'uint8' | 'uint16' | 'float16' | 'float32'
-// decoded.bitDepth: 8 | 10 | 12 | 16 | 32
-// decoded.metadata: JXLMetadata
 ```
 
-### `encode(imageData, options?, config?)`
-
-Encode ImageData or ExtendedImageData to JXL.
+### `encode(data, descriptor, options?, config?)`
 
 ```typescript
+encode(
+  data: Uint8Array | Uint16Array | Float16Array | Float32Array,
+  descriptor: JXLEncodeDescriptor,
+  options?: JXLEncodeOptions,
+  config?: InitConfig,
+): Promise<Uint8Array>
+
+interface JXLEncodeDescriptor {
+  geometry: { width: number; height: number };
+  channels: { model: 'rgb' | 'rgba' | 'gray' | 'graya'; count: number };
+  numeric: { dataType: 'uint8' | 'uint16' | 'float16' | 'float32' };
+  color?: { primaries?: ColorPrimaries };
+  transfer?: { function?: TransferFunction };
+  hdr?: { maxCLL?: number; maxPALL?: number; masteringDisplay?: MasteringDisplay };
+}
+
 interface JXLEncodeOptions {
-  quality?: number;              // 0-100 (default: 75)
-  effort?: number;               // 1-10 (default: 7, higher = slower/smaller)
-  lossless?: boolean;            // Lossless mode (default: false)
-  progressive?: boolean;         // Progressive decoding support
-  bitDepth?: number;             // 8, 10, 12, 16 for integers
-  colorSpace?: string;           // 'srgb', 'display-p3', 'rec2020'
-  transferFunction?: string;     // 'srgb', 'pq', 'hlg', 'linear'
-  maxThreads?: number;           // Max threads (default: 0 = auto, max: 8)
+  quality?: number;       // 0–100 (default: 75)
+  effort?: number;        // 1–10 (default: 7, higher = slower/smaller files)
+  lossless?: boolean;     // (default: false)
+  progressive?: boolean;  // (default: false)
+  maxThreads?: number;    // 0 = auto, max: 8
 }
-
-const encoded = await encode(imageData, { quality: 85, effort: 7 });
 ```
 
-### `getImageInfo(data)`
-
-Read metadata without full decoding.
+### `encodeSimple(imageData, quality?)`
 
 ```typescript
-const info = await getImageInfo(jxlBytes);
-console.log(info.width, info.height, info.bitDepth);
-console.log(info.metadata.isHDR);
+encodeSimple(imageData: ImageData, quality?: number): Promise<Uint8Array>
+// quality: 0–100 (default: 75)
+```
+
+### `getImageInfo(input)`
+
+```typescript
+getImageInfo(input: Uint8Array | ArrayBuffer): Promise<ImageDescriptor>
+```
+
+### `decodeToImageData(input, options?)`
+
+```typescript
+decodeToImageData(
+  input: Uint8Array | ArrayBuffer,
+  options?: JXLDecodeOptions,
+): Promise<ImageData>
 ```
 
 ### Worker Pool API
@@ -157,66 +180,69 @@ interface WorkerPoolConfig {
   lazyInit?: boolean;
 }
 
-const pool = await createWorkerPool(config);
-const decoded = await decodeInWorker(pool, data, options);
-const encoded = await encodeInWorker(pool, imageData, options);
-terminateWorkerPool(pool);
+createWorkerPool(config?: WorkerPoolConfig): Promise<JXLWorkerHandle>
+
+// Pool methods
+pool.decode(input, options?): Promise<{ data; descriptor }>
+pool.encode(data, descriptor, options?): Promise<Uint8Array>
+pool.getStats(): PoolStats
+pool.terminate(): void
+pool.isInitialized(): boolean
+```
+
+### Init
+
+```typescript
+interface InitConfig {
+  jsUrl?: string;
+  preferMT?: boolean;
+}
+
+initDecoder(config?: InitConfig): Promise<void>
+initEncoder(config?: InitConfig): Promise<void>
+isDecoderInitialized(): boolean
+isDecoderMultiThreaded(): boolean
 ```
 
 ## Data Types
 
-JXL supports multiple pixel formats. The decoder auto-detects format from the file:
+JXL natively stores float data. The decoder reads the format from the file:
 
-| DataType | TypedArray | Use Case |
-|----------|------------|----------|
-| `'uint8'` | `Uint8Array` | Standard 8-bit images |
-| `'uint16'` | `Uint16Array` | 10/12/16-bit HDR |
-| `'float16'` | `Float16Array` | HDR with wide range |
-| `'float32'` | `Float32Array` | Maximum precision HDR |
+| File format | Decoded `dataType` | `data` array |
+|-------------|-------------------|--------------|
+| 8-bit integer | `'uint8'` | `Uint8Array` |
+| 10/12/16-bit integer | `'uint16'` | `Uint16Array` |
+| float16 | `'float16'` | `Float16Array` |
+| float32 | `'float32'` | `Float32Array` |
 
-### Encoding with DataType
+Encoding respects the `numeric.dataType` in the descriptor:
 
 ```typescript
-// Float16 HDR
-const float16Data = {
-  data: new Float16Array(w * h * 4),
-  dataType: 'float16',
-  width: w,
-  height: h,
-  channels: 4,
-  bitDepth: 16,
-  metadata: { transferFunction: 'linear', isHDR: true },
-};
-
-const encoded = await encode(float16Data);
-
-// Decode preserves format
+// Encode float16 — file stores 16-bit float, decoder returns Float16Array
+const encoded = await encode(float16Data, {
+  ...descriptor,
+  numeric: { dataType: 'float16' },
+});
 const decoded = await decode(encoded);
-console.log(decoded.dataType);  // 'float16'
-console.log(decoded.data);      // Float16Array
+console.log(decoded.descriptor.numeric.dataType); // 'float16'
+console.log(decoded.data instanceof Float16Array); // true
 ```
 
-## Metadata
+## Quality vs Effort
 
-```typescript
-interface JXLMetadata {
-  colorPrimaries: 'bt709' | 'bt2020' | 'display-p3' | 'unknown';
-  transferFunction: 'srgb' | 'pq' | 'hlg' | 'linear' | 'bt709' | 'unknown';
-  matrixCoefficients: string;
-  fullRange: boolean;
-  maxCLL?: number;
-  maxPALL?: number;
-  masteringDisplay?: {
-    primaries: { red, green, blue };
-    whitePoint: [x, y];
-    luminance: { min, max };
-  };
-  iccProfile?: Uint8Array;
-  isHDR: boolean;
-  isAnimated: boolean;
-  frameCount: number;
-}
-```
+| Setting | Range | Effect |
+|---------|-------|--------|
+| `quality` | 0–100 | Compression ratio. 100 = best quality, largest files |
+| `effort` | 1–10 | Encoding speed. 10 = slowest, smallest files |
+
+Recommended presets:
+
+| Use case | quality | effort |
+|----------|---------|--------|
+| Fast preview | 70 | 3 |
+| Balanced | 85 | 7 |
+| Maximum quality | 95 | 9 |
+| Lossless | — | 7 | set `lossless: true` |
 
 ## Multi-threading
 
@@ -227,25 +253,13 @@ Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Embedder-Policy: require-corp
 ```
 
-Check support:
-
 ```typescript
-import { isMultiThreadSupported } from '@jcodecs/jxl';
+import { isMultiThreadSupported } from '@dimkatet/jcodecs-jxl';
 
 if (isMultiThreadSupported()) {
-  // Can use preferMT: true and maxThreads > 1
+  // Can use preferMT: true
 }
 ```
-
-## Quality vs Effort
-
-- **quality** (0-100): Controls compression ratio. 100 = best quality, larger files
-- **effort** (1-10): Controls encoding speed. 10 = slowest, smallest files
-
-Recommended settings:
-- Fast preview: `quality: 70, effort: 3`
-- Balanced: `quality: 85, effort: 7`
-- Maximum quality: `quality: 95, effort: 9`
 
 ## Native Libraries
 

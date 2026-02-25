@@ -81,6 +81,30 @@ export interface AutoWorkerClient {
   readonly exr?: EXRWorkerClient;
   /** List of available codecs (installed packages) */
   readonly availableCodecs: readonly ImageFormat[];
+
+  /** Decode image with auto-detection */
+  decode(input: Uint8Array | ArrayBuffer, options?: AutoDecodeOptions): Promise<AutoImageData>;
+  /** Encode image to specified format */
+  encode(input: AutoImageData | ImageData, options: AutoEncodeOptions): Promise<Uint8Array>;
+  /** Decode then encode to target format */
+  transcode(
+    input: Uint8Array | ArrayBuffer,
+    targetFormat: 'avif' | 'jxl' | 'exr',
+    options?: Omit<AutoEncodeOptions, 'format'>,
+  ): Promise<Uint8Array>;
+  /** Get combined stats from all pools */
+  getStats(): {
+    avif: ReturnType<NonNullable<AutoWorkerClient['avif']>['getStats']> | null;
+    jxl: ReturnType<NonNullable<AutoWorkerClient['jxl']>['getStats']> | null;
+    exr: ReturnType<NonNullable<AutoWorkerClient['exr']>['getStats']> | null;
+    total: { poolSize: number; availableWorkers: number; queuedTasks: number };
+  };
+  /** Terminate all worker pools */
+  terminate(): void;
+  /** Check if any pool is initialized */
+  isInitialized(): boolean;
+  /** Check if a specific codec pool is initialized */
+  isCodecInitialized(format: ImageFormat): boolean;
 }
 
 // ============================================================================
@@ -103,8 +127,6 @@ interface InternalState {
     exr?: typeof import('@dimkatet/jcodecs-exr/worker-api');
   };
 }
-
-const clientStates = new WeakMap<AutoWorkerClient, InternalState>();
 
 // ============================================================================
 // Codec detection
@@ -273,9 +295,80 @@ export async function createWorkerPool(
     get availableCodecs() {
       return [...state.availableCodecs] as const;
     },
-  };
 
-  clientStates.set(client, state);
+    async decode(input, options) {
+      const data = input instanceof ArrayBuffer ? new Uint8Array(input) : input;
+      const format = detectFormat(data);
+      if (format === 'unknown') throw new UnsupportedFormatError(data);
+      await ensurePoolInitialized(state, format);
+
+      const pool = state.pools[format];
+      if (!pool) throw new CodecNotInstalledError(format);
+
+      const result = await pool.decode(data, options as any);
+      return { data: result.data, descriptor: result.descriptor, format };
+    },
+
+    async encode(input, options) {
+      const { format } = options;
+      await ensurePoolInitialized(state, format);
+
+      let pixelData: Uint8Array | Uint16Array | Float16Array | Float32Array;
+      let descriptor: unknown;
+
+      if ('descriptor' in input) {
+        pixelData = input.data;
+        descriptor = input.descriptor as unknown;
+      } else {
+        pixelData = new Uint8Array(input.data.buffer, input.data.byteOffset, input.data.byteLength);
+        descriptor = buildDescriptorFromImageData(input);
+      }
+
+      const opts = {
+        avif: { quality: options.quality, maxThreads: options.maxThreads, lossless: options.lossless, ...options.avif } as AVIFEncodeOptions,
+        jxl:  { quality: options.quality, maxThreads: options.maxThreads, lossless: options.lossless, ...options.jxl } as JXLEncodeOptions,
+        exr:  { maxThreads: options.maxThreads, ...options.exr } as EXREncodeOptions,
+      };
+
+      const pool = state.pools[format];
+      if (!pool) throw new CodecNotInstalledError(format);
+
+      return pool.encode(pixelData as any, descriptor as any, opts[format] as any);
+    },
+
+    async transcode(input, targetFormat, options) {
+      const decoded = await client.decode(input);
+      return client.encode(decoded, { ...options, format: targetFormat });
+    },
+
+    getStats() {
+      const avif = state.pools.avif?.getStats() ?? null;
+      const jxl  = state.pools.jxl?.getStats()  ?? null;
+      const exr  = state.pools.exr?.getStats()   ?? null;
+      const all  = [avif, jxl, exr];
+      const sum  = (key: 'poolSize' | 'availableWorkers' | 'queuedTasks') =>
+        all.reduce((s, p) => s + (p?.[key] ?? 0), 0);
+      return {
+        avif, jxl, exr,
+        total: { poolSize: sum('poolSize'), availableWorkers: sum('availableWorkers'), queuedTasks: sum('queuedTasks') },
+      };
+    },
+
+    terminate() {
+      for (const pool of Object.values(state.pools)) pool.terminate();
+      state.pools = {};
+      state.initPromises.clear();
+    },
+
+    isInitialized() {
+      return Object.values(state.pools).some(p => p.isInitialized());
+    },
+
+    isCodecInitialized(format) {
+      if (format === 'unknown') return false;
+      return state.pools[format]?.isInitialized() ?? false;
+    },
+  };
 
   // Initialize pools eagerly if lazy: false
   const lazy = config.lazy ?? true;
@@ -288,231 +381,4 @@ export async function createWorkerPool(
   }
 
   return client;
-}
-
-/**
- * Decode image in worker with auto-detection.
- *
- * Automatically detects image format from magic bytes and routes
- * to the appropriate codec worker pool.
- */
-export async function decodeInWorker(
-  client: AutoWorkerClient,
-  input: Uint8Array | ArrayBuffer,
-  options?: AutoDecodeOptions,
-): Promise<AutoImageData> {
-  const state = clientStates.get(client);
-  if (!state) {
-    throw new Error('Invalid AutoWorkerClient');
-  }
-
-  const data =
-    input instanceof ArrayBuffer ? new Uint8Array(input) : input;
-
-  const format = detectFormat(data);
-  if (format === 'unknown') {
-    throw new UnsupportedFormatError(data);
-  }
-
-  await ensurePoolInitialized(state, format);
-
-  if (format === 'avif' && state.pools.avif && state.modules.avif) {
-    const result = await state.modules.avif.decodeInWorker(
-      state.pools.avif,
-      data,
-      options,
-    );
-    return { data: result.data, descriptor: result.descriptor, format: 'avif' };
-  }
-
-  if (format === 'jxl' && state.pools.jxl && state.modules.jxl) {
-    const result = await state.modules.jxl.decodeInWorker(
-      state.pools.jxl,
-      data,
-      options,
-    );
-    return { data: result.data, descriptor: result.descriptor, format: 'jxl' };
-  }
-
-  if (format === 'exr' && state.pools.exr && state.modules.exr) {
-    const result = await state.modules.exr.decodeInWorker(
-      state.pools.exr,
-      data,
-      options,
-    );
-    return { data: result.data, descriptor: result.descriptor, format: 'exr' };
-  }
-
-  throw new CodecNotInstalledError(format);
-}
-
-/**
- * Encode image in worker.
- *
- * Requires explicit format specification in options.
- */
-export async function encodeInWorker(
-  client: AutoWorkerClient,
-  input: AutoImageData | ImageData,
-  options: AutoEncodeOptions,
-): Promise<Uint8Array> {
-  const state = clientStates.get(client);
-  if (!state) {
-    throw new Error('Invalid AutoWorkerClient');
-  }
-
-  const { format } = options;
-  await ensurePoolInitialized(state, format);
-
-  // Split input into raw data + descriptor
-  let pixelData: Uint8Array | Uint16Array | Float16Array | Float32Array;
-  let descriptor: unknown;
-
-  if ('descriptor' in input) {
-    // AutoImageData — pass data and descriptor through as-is
-    pixelData = input.data;
-    descriptor = input.descriptor as unknown as Record<string, unknown>;
-  } else {
-    // Standard ImageData (8-bit sRGB RGBA)
-    pixelData = new Uint8Array(input.data.buffer, input.data.byteOffset, input.data.byteLength);
-    descriptor = buildDescriptorFromImageData(input);
-  }
-
-  const avifOpts: AVIFEncodeOptions = { quality: options.quality, maxThreads: options.maxThreads, lossless: options.lossless, ...options.avif };
-  const jxlOpts: JXLEncodeOptions = { quality: options.quality, maxThreads: options.maxThreads, lossless: options.lossless, ...options.jxl };
-  const exrOpts: EXREncodeOptions = { maxThreads: options.maxThreads, ...options.exr };
-
-  if (format === 'avif' && state.pools.avif && state.modules.avif) {
-    type AvifData = Parameters<typeof state.modules.avif.encodeInWorker>[1];
-    type AvifDesc = Parameters<typeof state.modules.avif.encodeInWorker>[2];
-    return state.modules.avif.encodeInWorker(
-      state.pools.avif,
-      pixelData as AvifData,
-      descriptor as AvifDesc,
-      avifOpts,
-    );
-  }
-
-  if (format === 'jxl' && state.pools.jxl && state.modules.jxl) {
-    type JxlData = Parameters<typeof state.modules.jxl.encodeInWorker>[1];
-    type JxlDesc = Parameters<typeof state.modules.jxl.encodeInWorker>[2];
-    return state.modules.jxl.encodeInWorker(
-      state.pools.jxl,
-      pixelData as JxlData,
-      descriptor as JxlDesc,
-      jxlOpts,
-    );
-  }
-
-  if (format === 'exr' && state.pools.exr && state.modules.exr) {
-    type ExrData = Parameters<typeof state.modules.exr.encodeInWorker>[1];
-    type ExrDesc = Parameters<typeof state.modules.exr.encodeInWorker>[2];
-    return state.modules.exr.encodeInWorker(
-      state.pools.exr,
-      pixelData as ExrData,
-      descriptor as ExrDesc,
-      exrOpts,
-    );
-  }
-
-  throw new CodecNotInstalledError(format);
-}
-
-/**
- * Transcode image in worker (decode + encode).
- *
- * Decodes input with auto-detection, then encodes to target format.
- */
-export async function transcodeInWorker(
-  client: AutoWorkerClient,
-  input: Uint8Array | ArrayBuffer,
-  targetFormat: 'avif' | 'jxl',
-  options?: Omit<AutoEncodeOptions, 'format'>,
-): Promise<Uint8Array> {
-  // Decode with auto-detection
-  const imageData = await decodeInWorker(client, input);
-
-  // Encode to target format
-  return encodeInWorker(client, imageData, {
-    ...options,
-    format: targetFormat,
-  });
-}
-
-/**
- * Get combined statistics from all worker pools.
- */
-export function getWorkerPoolStats(client: AutoWorkerClient): {
-  avif: ReturnType<AVIFWorkerClient['getStats']> | null;
-  jxl: ReturnType<JXLWorkerClient['getStats']> | null;
-  exr: ReturnType<EXRWorkerClient['getStats']> | null;
-  total: {
-    poolSize: number;
-    availableWorkers: number;
-    queuedTasks: number;
-  };
-} {
-  const state = clientStates.get(client);
-
-  const avifStats = state?.pools.avif?.getStats() ?? null;
-  const jxlStats = state?.pools.jxl?.getStats() ?? null;
-  const exrStats = state?.pools.exr?.getStats() ?? null;
-
-  return {
-    avif: avifStats,
-    jxl: jxlStats,
-    exr: exrStats,
-    total: {
-      poolSize: (avifStats?.poolSize ?? 0) + (jxlStats?.poolSize ?? 0) + (exrStats?.poolSize ?? 0),
-      availableWorkers:
-        (avifStats?.availableWorkers ?? 0) + (jxlStats?.availableWorkers ?? 0) + (exrStats?.availableWorkers ?? 0),
-      queuedTasks:
-        (avifStats?.queuedTasks ?? 0) + (jxlStats?.queuedTasks ?? 0) + (exrStats?.queuedTasks ?? 0),
-    },
-  };
-}
-
-/**
- * Terminate all worker pools.
- */
-export function terminateWorkerPool(client: AutoWorkerClient): void {
-  const state = clientStates.get(client);
-  if (!state) return;
-
-  state.pools.avif?.terminate();
-  state.pools.jxl?.terminate();
-  state.pools.exr?.terminate();
-  state.pools = {};
-  state.initPromises.clear();
-  clientStates.delete(client);
-}
-
-/**
- * Check if any worker pool is initialized.
- */
-export function isWorkerPoolInitialized(client: AutoWorkerClient): boolean {
-  const state = clientStates.get(client);
-  if (!state) return false;
-
-  return (
-    (state.pools.avif?.isInitialized() ?? false) ||
-    (state.pools.jxl?.isInitialized() ?? false) ||
-    (state.pools.exr?.isInitialized() ?? false)
-  );
-}
-
-/**
- * Check if a specific codec pool is initialized.
- */
-export function isCodecPoolInitialized(
-  client: AutoWorkerClient,
-  format: ImageFormat,
-): boolean {
-  const state = clientStates.get(client);
-  if (!state) return false;
-
-  if (format === 'avif') return state.pools.avif?.isInitialized() ?? false;
-  if (format === 'jxl') return state.pools.jxl?.isInitialized() ?? false;
-  if (format === 'exr') return state.pools.exr?.isInitialized() ?? false;
-  return false;
 }

@@ -1,7 +1,11 @@
 /**
  * Worker API for JXL encoding/decoding
  */
-import { CodecWorkerClient } from "@dimkatet/jcodecs-core/codec-worker-client";
+import {
+  CodecWorkerClient,
+  createWorkerHandle,
+  type WorkerHandle,
+} from "@dimkatet/jcodecs-core/codec-worker-client";
 import { isMultiThreadSupported } from "@dimkatet/jcodecs-core";
 import type { JXLEncodeOptions, JXLDecodeOptions } from "./options";
 import type { JXLImageData, JXLEncodeDescriptor } from "./types";
@@ -10,9 +14,10 @@ import {
   workerUrl as defaultWorkerUrl,
   mtDecoderUrl,
   stDecoderUrl,
-  mtEncoderUrl,
-  stEncoderUrl,
 } from "./urls";
+
+const mtEncoderUrl = new URL("./jxl_enc_mt.js", import.meta.url).href;
+const stEncoderUrl = new URL("./jxl_enc.js", import.meta.url).href;
 
 export interface WorkerPoolConfig extends WorkerInitPayload {
   /** Number of workers in the pool */
@@ -23,60 +28,32 @@ export interface WorkerPoolConfig extends WorkerInitPayload {
   preferMT?: boolean;
 }
 
-export type JXLWorkerClient = CodecWorkerClient<JXLWorkerHandlers>;
+export type JXLWorkerHandle = WorkerHandle<
+  JXLDecodeOptions,
+  JXLImageData,
+  Uint8Array | Uint16Array | Float16Array | Float32Array,
+  JXLEncodeDescriptor,
+  JXLEncodeOptions
+>;
+
+/** @deprecated use JXLWorkerHandle */
+export type JXLWorkerClient = JXLWorkerHandle;
 
 export async function createWorkerPool(
   config?: WorkerPoolConfig,
-): Promise<JXLWorkerClient> {
-  const client = new CodecWorkerClient<JXLWorkerHandlers>();
+): Promise<JXLWorkerHandle> {
+  const raw = new CodecWorkerClient<JXLWorkerHandlers>();
   const useMT = isMultiThreadSupported() && config?.preferMT;
 
-  const decoderUrl = useMT ? mtDecoderUrl : stDecoderUrl;
-  const encoderUrl = useMT ? mtEncoderUrl : stEncoderUrl;
-
-  await client.init({
+  await raw.init({
     workerUrl: config?.workerUrl ?? defaultWorkerUrl,
     poolSize: config?.poolSize,
     initPayload: {
       ...config,
-      decoderUrl,
-      encoderUrl,
+      decoderUrl: useMT ? mtDecoderUrl : stDecoderUrl,
+      encoderUrl: useMT ? mtEncoderUrl : stEncoderUrl,
     },
   });
 
-  return client;
+  return createWorkerHandle(raw) as JXLWorkerHandle;
 }
-
-export async function encodeInWorker(
-  client: JXLWorkerClient,
-  data: Uint8Array | Uint16Array | Float16Array | Float32Array,
-  descriptor: JXLEncodeDescriptor,
-  options?: JXLEncodeOptions,
-): Promise<Uint8Array> {
-  return client.call("encode", { data, descriptor, options }, [data.buffer]);
-}
-
-export async function decodeInWorker(
-  client: JXLWorkerClient,
-  input: Uint8Array | ArrayBuffer,
-  options?: JXLDecodeOptions,
-): Promise<JXLImageData> {
-  const data =
-    input instanceof ArrayBuffer
-      ? new Uint8Array(input.slice(0))
-      : new Uint8Array(
-          input.buffer.slice(
-            input.byteOffset,
-            input.byteOffset + input.byteLength,
-          ),
-        );
-
-  return client.call("decode", { data, options }, [data.buffer]);
-}
-
-export const getWorkerPoolStats = (client: JXLWorkerClient) =>
-  client.getStats();
-export const terminateWorkerPool = (client: JXLWorkerClient) =>
-  client.terminate();
-export const isWorkerPoolInitialized = (client: JXLWorkerClient) =>
-  client.isInitialized();

@@ -1,6 +1,6 @@
 {
   "name": "@dimkatet/jcodecs-exr",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "OpenEXR encoder/decoder using OpenEXR 3.x compiled to WebAssembly",
   "type": "module",
   "main": "./dist/index.cjs",

@@ -22,5 +22,7 @@ export default defineConfig({
   external: [
     '@dimkatet/jcodecs-avif',
     '@dimkatet/jcodecs-jxl',
+    '@dimkatet/jcodecs-exr',
+    '@dimkatet/jcodecs-uhdr',
   ],
 });
