@@ -2,7 +2,10 @@ export { createCodecWorker } from "./codec-worker";
 
 export {
   CodecWorkerClient,
+  createWorkerHandle,
+  normalizeWorkerInput,
   type CodecWorkerClientConfig,
+  type WorkerHandle,
 } from "./codec-worker-client";
 
 export type { CodecWorkerHandlers, CodecWorkerMethods } from "./protocol";

@@ -15,8 +15,6 @@ import {
   encode as autoEncode,
   detectFormat,
   createWorkerPool,
-  decodeInWorker,
-  encodeInWorker,
 } from '@dimkatet/jcodecs-auto';
 
 import {
@@ -128,7 +126,7 @@ export async function decode(
     if (!workerPool) {
       throw new Error('Worker pool not initialized');
     }
-    return await decodeInWorker(workerPool, data, options);
+    return await workerPool.decode(data, options);
   }
 
   return await autoDecode(data, options);
@@ -171,7 +169,7 @@ export async function encode(
     if (!workerPool) {
       throw new Error('Worker pool not initialized');
     }
-    return await encodeInWorker(workerPool, modifiedImageData, encodeOptions);
+    return await workerPool.encode(modifiedImageData, encodeOptions);
   }
 
   return await autoEncode(modifiedImageData, encodeOptions);

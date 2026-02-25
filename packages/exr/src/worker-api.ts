@@ -1,7 +1,11 @@
 /**
  * Worker API for EXR encoding/decoding
  */
-import { CodecWorkerClient } from "@dimkatet/jcodecs-core/codec-worker-client";
+import {
+  CodecWorkerClient,
+  createWorkerHandle,
+  type WorkerHandle,
+} from "@dimkatet/jcodecs-core/codec-worker-client";
 import { isMultiThreadSupported } from "@dimkatet/jcodecs-core";
 import type { EXREncodeOptions, EXRDecodeOptions } from "./options";
 import type { EXREncodeDescriptor, EXRImageData } from "./types";
@@ -10,9 +14,10 @@ import {
   workerUrl as defaultWorkerUrl,
   mtDecoderUrl,
   stDecoderUrl,
-  mtEncoderUrl,
-  stEncoderUrl,
 } from "./urls";
+
+const mtEncoderUrl = new URL("./exr_enc_mt.js", import.meta.url).href;
+const stEncoderUrl = new URL("./exr_enc.js", import.meta.url).href;
 
 export interface WorkerPoolConfig extends WorkerInitPayload {
   /** Number of workers in the pool */
@@ -23,60 +28,33 @@ export interface WorkerPoolConfig extends WorkerInitPayload {
   preferMT?: boolean;
 }
 
-export type EXRWorkerClient = CodecWorkerClient<EXRWorkerHandlers>;
+export type EXRWorkerHandle = WorkerHandle<
+  EXRDecodeOptions,
+  EXRImageData,
+  Float16Array | Float32Array,
+  EXREncodeDescriptor,
+  EXREncodeOptions
+>;
+
+/** @deprecated use EXRWorkerHandle */
+export type EXRWorkerClient = EXRWorkerHandle;
 
 export async function createWorkerPool(
   config?: WorkerPoolConfig,
-): Promise<EXRWorkerClient> {
-  const client = new CodecWorkerClient<EXRWorkerHandlers>();
+): Promise<EXRWorkerHandle> {
+  const raw = new CodecWorkerClient<EXRWorkerHandlers>();
   const useMT = isMultiThreadSupported() && config?.preferMT;
 
-  const decoderUrl = useMT ? mtDecoderUrl : stDecoderUrl;
-  const encoderUrl = useMT ? mtEncoderUrl : stEncoderUrl;
-
-  await client.init({
+  await raw.init({
     workerUrl: config?.workerUrl ?? defaultWorkerUrl,
     poolSize: config?.poolSize,
     initPayload: {
       ...config,
-      decoderUrl,
-      encoderUrl,
+      decoderUrl: useMT ? mtDecoderUrl : stDecoderUrl,
+      encoderUrl: useMT ? mtEncoderUrl : stEncoderUrl,
     },
   });
 
-  return client;
+  // EXR encode does not transfer the buffer — pass encodeTransfer: false
+  return createWorkerHandle(raw, { encodeTransfer: false }) as EXRWorkerHandle;
 }
-
-export async function encodeInWorker(
-  client: EXRWorkerClient,
-  data: Float16Array | Float32Array,
-  descriptor: EXREncodeDescriptor,
-  options?: EXREncodeOptions,
-): Promise<Uint8Array> {
-  return client.call("encode", { data, descriptor, options });
-}
-
-export async function decodeInWorker(
-  client: EXRWorkerClient,
-  input: Uint8Array | ArrayBuffer,
-  options?: EXRDecodeOptions,
-): Promise<EXRImageData> {
-  const data =
-    input instanceof ArrayBuffer
-      ? new Uint8Array(input.slice(0))
-      : new Uint8Array(
-          input.buffer.slice(
-            input.byteOffset,
-            input.byteOffset + input.byteLength,
-          ),
-        );
-
-  return client.call("decode", { data, options }, [data.buffer]);
-}
-
-export const getWorkerPoolStats = (client: EXRWorkerClient) =>
-  client.getStats();
-export const terminateWorkerPool = (client: EXRWorkerClient) =>
-  client.terminate();
-export const isWorkerPoolInitialized = (client: EXRWorkerClient) =>
-  client.isInitialized();

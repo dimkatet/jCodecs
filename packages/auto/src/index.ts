@@ -77,16 +77,7 @@ export { DEFAULT_DECODE_OPTIONS, DEFAULT_ENCODE_OPTIONS } from './options';
 // Worker API
 // ============================================================================
 
-export {
-  createWorkerPool,
-  decodeInWorker,
-  encodeInWorker,
-  transcodeInWorker,
-  getWorkerPoolStats,
-  terminateWorkerPool,
-  isWorkerPoolInitialized,
-  isCodecPoolInitialized,
-} from './worker-api';
+export { createWorkerPool } from './worker-api';
 
 export type {
   WorkerPoolConfig,

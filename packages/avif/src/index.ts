@@ -39,16 +39,9 @@ export type {
 export { SUPPORTED_DATA_TYPES } from './types';
 
 // Worker API
-export {
-  createWorkerPool,
-  encodeInWorker,
-  decodeInWorker,
-  getWorkerPoolStats,
-  terminateWorkerPool,
-  isWorkerPoolInitialized,
-} from './worker-api';
+export { createWorkerPool } from './worker-api';
 
-export type { WorkerPoolConfig, AVIFWorkerClient } from './worker-api';
+export type { WorkerPoolConfig, AVIFWorkerHandle, AVIFWorkerClient } from './worker-api';
 
 // Re-export from core
 export { isMultiThreadSupported } from '@dimkatet/jcodecs-core';
