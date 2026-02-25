@@ -1,5 +1,27 @@
 # @dimkatet/jcodecs-core
 
+## 0.7.0
+
+### Minor Changes
+
+- Replace free-function worker API with method-based `WorkerHandle`.
+
+  **Breaking:** `decodeInWorker`, `encodeInWorker`, `transcodeInWorker`, `terminateWorkerPool`, `getWorkerPoolStats`, `isWorkerPoolInitialized`, `isCodecPoolInitialized` are removed from all packages. Use pool methods instead:
+
+  ```ts
+  // before
+  const { data, descriptor } = await decodeInWorker(pool, input);
+  terminateWorkerPool(pool);
+
+  // after
+  const { data, descriptor } = await pool.decode(input);
+  pool.terminate();
+  ```
+
+  **New in core:** `WorkerHandle` interface, `createWorkerHandle()` factory, `normalizeWorkerInput()` — exported from `@dimkatet/jcodecs-core/codec-worker-client`.
+
+  **Renamed types:** `AVIFWorkerClient` → `AVIFWorkerHandle`, `JXLWorkerClient` → `JXLWorkerHandle`, `EXRWorkerClient` → `EXRWorkerHandle`. Old names kept as deprecated aliases.
+
 ## 0.6.0
 
 ### Minor Changes
