@@ -2,6 +2,8 @@
  * Worker Pool for parallel image processing
  */
 
+import type { WorkerLike } from "./compat";
+
 export interface WorkerTask<TInput, _TOutput = unknown> {
   type: string;
   payload: TInput;
@@ -24,14 +26,14 @@ interface QueuedTask<TInput, TOutput> {
  * Generic Worker Pool for executing tasks in parallel
  */
 export class WorkerPool<TInput = unknown, TOutput = unknown> {
-  private workers: Worker[] = [];
-  private availableWorkers: Worker[] = [];
+  private workers: WorkerLike[] = [];
+  private availableWorkers: WorkerLike[] = [];
   private taskQueue: QueuedTask<TInput, TOutput>[] = [];
   private terminated = false;
   private initPromise: Promise<void> | null = null;
 
   constructor(
-    private workerFactory: () => Worker,
+    private workerFactory: () => WorkerLike,
     private poolSize: number = typeof navigator !== 'undefined'
       ? navigator.hardwareConcurrency || 4
       : 4
@@ -60,7 +62,7 @@ export class WorkerPool<TInput = unknown, TOutput = unknown> {
           reject(new Error(`Worker ${i} initialization timeout`));
         }, 30000);
 
-        const handler = (e: MessageEvent) => {
+        const handler = (e: { data: any }) => {
           if (e.data.type === 'ready') {
             clearTimeout(timeoutId);
             worker.removeEventListener('message', handler);
@@ -73,7 +75,7 @@ export class WorkerPool<TInput = unknown, TOutput = unknown> {
         };
 
         worker.addEventListener('message', handler);
-        worker.addEventListener('error', (err) => {
+        worker.addEventListener('error', (err: { message: string }) => {
           clearTimeout(timeoutId);
           reject(new Error(`Worker error: ${err.message}`));
         });
@@ -110,7 +112,7 @@ export class WorkerPool<TInput = unknown, TOutput = unknown> {
       const worker = this.availableWorkers.pop()!;
       const { task, resolve, reject } = this.taskQueue.shift()!;
 
-      const messageHandler = (e: MessageEvent<WorkerResult<TOutput>>) => {
+      const messageHandler = (e: { data: WorkerResult<TOutput> }) => {
         worker.removeEventListener('message', messageHandler);
         worker.removeEventListener('error', errorHandler);
         this.availableWorkers.push(worker);
@@ -123,7 +125,7 @@ export class WorkerPool<TInput = unknown, TOutput = unknown> {
         }
       };
 
-      const errorHandler = (e: ErrorEvent) => {
+      const errorHandler = (e: { message: string }) => {
         worker.removeEventListener('message', messageHandler);
         worker.removeEventListener('error', errorHandler);
         this.availableWorkers.push(worker);

@@ -13,6 +13,121 @@ export default defineConfig({
         },
       }),
 
+      defineProject({
+        test: {
+          name: "avif-node",
+          root: "./packages/avif",
+          environment: "node",
+          include: ["**/tests/*.test.ts", "**/tests/node/**/*.test.ts"],
+          setupFiles: [resolve(__dirname, "./vitest.node-setup.ts")],
+          env: {
+            VITEST_FIXTURES_DIR: resolve(__dirname, "./packages/avif/tests/fixtures"),
+          },
+          testTimeout: 60000,
+        },
+        resolve: {
+          alias: {
+            "@dimkatet/jcodecs-avif": resolve(
+              __dirname,
+              "./packages/avif/dist/index.js",
+            ),
+          },
+        },
+      }),
+
+      defineProject({
+        test: {
+          name: "jxl-node",
+          root: "./packages/jxl",
+          environment: "node",
+          include: ["**/tests/*.test.ts", "**/tests/node/**/*.test.ts"],
+          setupFiles: [resolve(__dirname, "./vitest.node-setup.ts")],
+          env: {
+            VITEST_FIXTURES_DIR: resolve(__dirname, "./packages/jxl/tests/fixtures"),
+          },
+          testTimeout: 60000,
+        },
+        resolve: {
+          alias: {
+            "@dimkatet/jcodecs-jxl": resolve(
+              __dirname,
+              "./packages/jxl/dist/index.js",
+            ),
+          },
+        },
+      }),
+
+      defineProject({
+        test: {
+          name: "exr-node",
+          root: "./packages/exr",
+          environment: "node",
+          include: ["**/tests/*.test.ts", "**/tests/node/**/*.test.ts"],
+          setupFiles: [resolve(__dirname, "./vitest.node-setup.ts")],
+          env: {
+            VITEST_FIXTURES_DIR: resolve(__dirname, "./packages/exr/tests/fixtures"),
+          },
+          testTimeout: 60000,
+        },
+        resolve: {
+          alias: {
+            "@dimkatet/jcodecs-exr": resolve(
+              __dirname,
+              "./packages/exr/dist/index.js",
+            ),
+          },
+        },
+      }),
+
+      defineProject({
+        test: {
+          name: "auto-node",
+          root: "./packages/auto",
+          environment: "node",
+          include: ["**/tests/*.test.ts", "**/tests/node/**/*.test.ts"],
+          setupFiles: [resolve(__dirname, "./vitest.node-setup.ts")],
+          env: {
+            VITEST_FIXTURES_DIR: resolve(__dirname, "./packages/auto/tests/fixtures"),
+          },
+          testTimeout: 60000,
+        },
+        resolve: {
+          alias: {
+            "@dimkatet/jcodecs-auto": resolve(
+              __dirname,
+              "./packages/auto/dist/index.js",
+            ),
+            "@dimkatet/jcodecs-avif": resolve(
+              __dirname,
+              "./packages/avif/dist/index.js",
+            ),
+            "@dimkatet/jcodecs-jxl": resolve(
+              __dirname,
+              "./packages/jxl/dist/index.js",
+            ),
+          },
+        },
+      }),
+
+      defineProject({
+        test: {
+          name: "processing-node",
+          root: "./packages/processing",
+          environment: "node",
+          include: ["**/tests/*.test.ts", "**/tests/node/**/*.test.ts"],
+          setupFiles: [resolve(__dirname, "./vitest.node-setup.ts")],
+          testTimeout: 60000,
+        },
+        resolve: {
+          alias: {
+            "@dimkatet/jcodecs-processing": resolve(
+              __dirname,
+              "./packages/processing/dist/index.js",
+            ),
+          },
+        },
+      }),
+
       mergeConfig(
         baseConfig,
         defineProject({

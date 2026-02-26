@@ -16,10 +16,18 @@ import type { DataType } from "../types";
  * only available on the main thread — causing "undefined is not an object
  * (reading 'wrapDynamicImport')" errors inside Web Workers.
  *
+ * In Node.js (vite-node), `new Function`'s `import()` runs in an isolated VM
+ * context without ESM loader support, throwing "A dynamic import callback was
+ * not specified". A plain `import(url)` is used instead — vite-node transforms
+ * it to `__vite_ssr_dynamic_import__` which handles file:// resolution correctly.
+ *
  * @param url - URL of the ES module to import
  * @returns The module's namespace object typed as T
  */
 export function importModule<T>(url: string): Promise<T> {
+  if (typeof process !== 'undefined' && process.versions?.node) {
+    return import(/* @vite-ignore */ url) as unknown as Promise<T>;
+  }
   return (new Function('u', 'return import(u)') as (u: string) => Promise<T>)(url);
 }
 
