@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { CodecNotInstalledError } from '../src/errors';
 import { createMockCodecModule } from './__mocks__/codec-adapter';
 
 // Mock the codec packages
@@ -105,9 +104,13 @@ describe('codec-registry', () => {
     it('throws CodecNotInstalledError for missing format', async () => {
       registryModule._resetForTesting();
 
-      await expect(registryModule.getCodec('avif')).rejects.toThrow(
-        CodecNotInstalledError
-      );
+      // Use toMatchObject instead of toThrow(Class) because vi.resetModules() in
+      // beforeEach causes codec-registry to import a fresh errors.ts, making the
+      // class identity differ from the top-level import in Node.js environments.
+      await expect(registryModule.getCodec('avif')).rejects.toMatchObject({
+        name: 'CodecNotInstalledError',
+        format: 'avif',
+      });
     });
 
     it('caches loaded codec', async () => {

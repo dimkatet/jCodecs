@@ -11,6 +11,8 @@
 import { CodecWorkerHandlers, InitPayloadType } from "./protocol";
 import { WorkerPool } from "./pool";
 import type { WorkerTask } from "./pool";
+import { NodeWorkerAdapter } from "./compat";
+import type { WorkerLike } from "./compat";
 
 export interface CodecWorkerClientConfig<P = unknown> {
   /** URL to the worker script */
@@ -46,16 +48,32 @@ export class CodecWorkerClient<
 
     const { workerUrl, poolSize, initPayload } = this.config;
 
-    this.pool = new WorkerPool(() => {
-      const worker = new Worker(workerUrl, { type: "module" });
-      worker.postMessage({
-        type: "init",
-        id: -1,
-        payload: initPayload,
-      });
-      return worker;
-    }, poolSize);
+    let workerFactory: () => WorkerLike;
 
+    if (typeof process !== 'undefined' && process.versions?.node) {
+      // Node.js: use worker_threads. Dynamic import so browser bundles don't include it.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { Worker: NodeWorker } = await import('node:worker_threads') as any;
+      workerFactory = () => {
+        // Node.js worker_threads accepts URL objects or absolute paths,
+        // but NOT file:// strings — convert string file:// URLs to URL objects.
+        const nodeUrl = typeof workerUrl === 'string' && workerUrl.startsWith('file://')
+          ? new URL(workerUrl)
+          : workerUrl;
+        const adapter = new NodeWorkerAdapter(new NodeWorker(nodeUrl));
+        adapter.postMessage({ type: 'init', id: -1, payload: initPayload });
+        return adapter;
+      };
+    } else {
+      // Browser: use Web Worker API
+      workerFactory = () => {
+        const worker = new Worker(workerUrl, { type: 'module' });
+        worker.postMessage({ type: 'init', id: -1, payload: initPayload });
+        return worker as unknown as WorkerLike;
+      };
+    }
+
+    this.pool = new WorkerPool(workerFactory, poolSize);
     await this.pool.init();
   }
 

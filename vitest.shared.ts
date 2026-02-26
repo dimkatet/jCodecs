@@ -14,7 +14,7 @@ export const baseConfig = {
   test: {
     // Browser tests only
     environment: "node",
-    include: ["**/*.test.ts"],
+    include: ["**/tests/*.test.ts"],
     watch: false,
 
     // Browser mode

@@ -1,4 +1,5 @@
 export { createCodecWorker } from "./codec-worker";
+export type { WorkerLike } from "./compat";
 
 export {
   CodecWorkerClient,

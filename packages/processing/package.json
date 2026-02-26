@@ -1,6 +1,6 @@
 {
   "name": "@dimkatet/jcodecs-processing",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Image processing operations (resize, crop, rotate) compiled to WebAssembly",
   "type": "module",
   "main": "./dist/index.cjs",

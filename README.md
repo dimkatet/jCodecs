@@ -1,16 +1,16 @@
 # jCodecs
 
-Browser-native image codecs powered by WebAssembly. Full HDR support with a unified TypeScript API.
+Image codecs powered by WebAssembly. Full HDR support with a unified TypeScript API. Works in browsers and Node.js.
 
 ## Packages
 
 | Package | Description | Version |
 |---------|-------------|---------|
-| [`@dimkatet/jcodecs-core`](./packages/core) | Shared types, WASM utilities, worker pool | 0.6.0 |
-| [`@dimkatet/jcodecs-avif`](./packages/avif) | AVIF encoder/decoder (libavif + dav1d/aom) | 0.6.1 |
-| [`@dimkatet/jcodecs-jxl`](./packages/jxl) | JPEG-XL encoder/decoder (libjxl) | 0.3.1 |
-| [`@dimkatet/jcodecs-exr`](./packages/exr) | OpenEXR encoder/decoder (OpenEXR 3.x) | 0.1.0 |
-| [`@dimkatet/jcodecs-auto`](./packages/auto) | Auto-detect format, unified API | 0.5.0 |
+| [`@dimkatet/jcodecs-core`](./packages/core) | Shared types, WASM utilities, worker pool | 0.7.0 |
+| [`@dimkatet/jcodecs-avif`](./packages/avif) | AVIF encoder/decoder (libavif + dav1d/aom) | 0.7.0 |
+| [`@dimkatet/jcodecs-jxl`](./packages/jxl) | JPEG-XL encoder/decoder (libjxl) | 0.4.0 |
+| [`@dimkatet/jcodecs-exr`](./packages/exr) | OpenEXR encoder/decoder (OpenEXR 3.x) | 0.2.0 |
+| [`@dimkatet/jcodecs-auto`](./packages/auto) | Auto-detect format, unified API | 0.6.0 |
 
 ## Features
 
@@ -19,7 +19,8 @@ Browser-native image codecs powered by WebAssembly. Full HDR support with a unif
 - **Transfer Functions** — sRGB, PQ (HDR10), HLG, Linear
 - **OpenEXR** — industry-standard HDR format, float16/float32
 - **Multi-threaded** — up to 8 threads via SharedArrayBuffer
-- **Web Workers** — non-blocking Worker Pool API
+- **Worker Pool** — non-blocking parallel API for browsers and Node.js
+- **Node.js** — full support via `node:worker_threads`, no browser APIs required
 - **Unified Metadata** — all codecs share the same `ImageDescriptor` type
 
 ## Installation
@@ -130,17 +131,34 @@ const exrBytes = await encode(float32Data, {
 const simple = await encodeSimple(imageData, 'zip');
 ```
 
-### Worker Pool (non-blocking)
+### Worker Pool (non-blocking, browser + Node.js)
 
 ```typescript
-import { createWorkerPool, decodeInWorker, encodeInWorker } from '@dimkatet/jcodecs-auto';
+import { createWorkerPool } from '@dimkatet/jcodecs-auto';
 
-const pool = await createWorkerPool({ poolSize: 4, preferMT: true });
+const pool = await createWorkerPool({ poolSize: 4 });
 
-const decoded  = await decodeInWorker(pool, buffer);
-const encoded  = await encodeInWorker(pool, decoded, { format: 'jxl', quality: 85 });
+const decoded = await pool.decode(buffer);
+const encoded = await pool.encode(decoded, { format: 'jxl', quality: 85 });
 
-terminateWorkerPool(pool);
+console.log(pool.getStats()); // { poolSize, availableWorkers, queuedTasks }
+
+pool.terminate();
+```
+
+Works identically in Node.js — no code changes needed:
+
+```typescript
+// Node.js
+import { readFile } from 'node:fs/promises';
+import { createWorkerPool } from '@dimkatet/jcodecs-avif';
+
+const pool = await createWorkerPool({ poolSize: 4 });
+const data = await readFile('image.avif');
+const { descriptor } = await pool.decode(new Uint8Array(data));
+
+console.log(descriptor.geometry.width);
+pool.terminate();
 ```
 
 ## ImageDescriptor
@@ -182,7 +200,7 @@ if (isMultiThreadSupported()) {
 
 ## Building from Source
 
-Prerequisites: Node.js ≥ 20, pnpm ≥ 9, Docker.
+Prerequisites: Node.js ≥ 24, pnpm ≥ 9, Docker.
 
 ```bash
 git clone <repo>
@@ -216,7 +234,7 @@ jCodecs/
 - [x] OpenEXR (OpenEXR 3.x)
 - [x] HDR float16/float32
 - [x] Multi-threaded encoding/decoding
-- [x] Web Workers API
+- [x] Worker Pool API (browser + Node.js)
 - [x] Unified format auto-detection
 - [ ] WebP codec
 - [ ] Streaming decode API
